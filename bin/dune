@@ -1,0 +1,4 @@
+(executable
+ (public_name stack_first_language)
+ (name main)
+ (libraries stack_first_language))
