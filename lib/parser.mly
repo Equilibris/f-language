@@ -1,84 +1,109 @@
-%token EOF
+%token LET IN
 %token IF THEN ELSE
-%token RPAREN   LPAREN
-%token RBRACKET LBRACKET
-%token WALRUS COLON
-%token COMMA
-%token<int> INT
-%token<string> CONSTRUCTOR ID
+%token LPAR RPAR COMMA
+%token FUN EQ
+%token ARR TYPE OR DATA SEMI
+%token EOF
 
-%type<Ast.tuple_expr> inner_tuple
+%token <string> ID CONSTRUCTOR TYPE_VAR
 
-%type<Ast.bind_expr>        bind
-%type<Ast.call_expr>        call
-%type<Ast.tuple_expr>       tuple
-%type<Ast.lambda_expr>      lambda
-%type<Ast.condition_expr>   condition
-%type<Ast.constructor_expr> constructor
+%type <unit> maybe_or
 
-%type<Ast.expr> expr
+%type <Ast.constructor_def list> constructors
 
-%start<Ast.top_level_decl list> top_level
+%type <Ast.tuple_ty> ty_tuple_inner
+%type <Ast.ty> ty ty_factor
 
+%type  <Ast.expr> expr
+
+%type <Ast.tuple_expr> tuple_inner
+
+%start <Ast.ty> test_ty
+%start <Ast.stmt list> top_level
+%start <Ast.expr> test_expr
 
 %left FUN
-%left COND
-%left WALRUS
-%left LPAREN
+%left LET
+%left LPAR
 %left ID
 %left APP
 
+%right ARR
+%left TAPP
+
 %%
 
-bind:
-    name = ID; WALRUS; value = expr; COLON; within = expr {
-        let open Ast in
-        { name; value; within }
-    }
+ty_tuple_inner:
+    | v = ty; COMMA; sub = ty_tuple_inner { v :: sub }
+    | ty { [$1] }
+    | { [] }
 
-call:
-    callee = expr; arg = expr %prec APP {
-        let open Ast in
-        { callee; arg; }
-    }
+ty_factor:
+    | LPAR; ty; RPAR
+        { $2 }
+    | LPAR; RPAR
+        { let open Ast in TupleTy [] }
+    | LPAR; v = ty; COMMA; sub = ty_tuple_inner RPAR
+        { let open Ast in TupleTy (v::sub) }
+    | ID
+        { let open Ast in Id $1}
+    | TYPE_VAR
+        { let open Ast in Var $1 }
+    | ty = ty_factor; arg = ty_factor %prec TAPP
+        { let open Ast in Applicative { ty; arg } }
 
-lambda:
-    RBRACKET; binding = ID; LBRACKET; content = expr %prec FUN{
-        let open Ast in
-        { binding; content }
-    }
+ty:
+    | ty_factor { $1 }
+    | i = ty; ARR; o = ty
+        { let open Ast in Arrow { i; o } }
 
-condition:
-    IF; predicate = expr; THEN t_branch = expr; ELSE; f_branch = expr {
-        let open Ast in
-        { predicate; t_branch; f_branch }
-    }
+constructors:
+    | constructor = CONSTRUCTOR; ty = ty
+        { let open Ast in [{ constructor; ty }] }
+    | constructor = CONSTRUCTOR; ty = ty; OR; sub = constructors
+        { let open Ast in { constructor; ty }::sub }
 
-inner_tuple:
-    | current = expr; COMMA; prev = inner_tuple { current::prev }
+tuple_inner:
+    | v = expr; COMMA; sub = tuple_inner { v :: sub }
     | expr { [$1] }
     | { [] }
 
-tuple:
-    | RPAREN; a = expr; COMMA; sub = inner_tuple; LPAREN { List.rev (a::sub) }
-    | RPAREN; LPAREN { [] }
-
-constructor:
-    name = CONSTRUCTOR; expr = expr { (name, expr) }
-
 expr:
-    | ID           { Id $1 }
-    | RPAREN; expr; LPAREN { $2 }
-    | bind         { Bind $1 }
-    | condition    { Condition $1 }
-    (* | call         { Call $1 } *)
-    | lambda       { Lambda $1 }
-    | tuple        { Tuple (List.rev $1) }
-    | constructor  { Constructor $1 }
-    | INT          { Lit $1 }
+    | id = CONSTRUCTOR; expr = expr
+        { let open Ast in Constructor (id, expr) }
+    | IF; predicate = expr; THEN; t_branch = expr; ELSE; f_branch = expr
+        { let open Ast in Condition { predicate; t_branch; f_branch; } }
+    | LPAR; RPAR
+        { let open Ast in Tuple [] }
+    | LPAR; fst = expr; COMMA; cont = tuple_inner; RPAR
+        { let open Ast in Tuple (fst :: cont) }
+    | LPAR; expr; RPAR
+        { $2 }
+    | LET; name = ID; EQ; value = expr; IN; within = expr;
+        { let open Ast in Bind { name; value; within } }
+    | FUN; binding = ID; content = expr %prec FUN 
+        { let open Ast in Lambda { binding; content } }
+    | callee = expr; arg = expr %prec APP
+        { let open Ast in Call { callee; arg } }
+    | ID
+        { let open Ast in Id $1 }
+
+test_ty:
+    ty; EOF { $1 }
+
+test_expr:
+    expr; EOF { $1 }
+
+maybe_or:
+    | OR { () }
+    | { () }
 
 top_level:
-    | name = ID; WALRUS; expr = expr; sub = top_level {
-        let open Ast in { name; expr; }::sub
+    | DATA; name = ID; maybe_or; constructors = constructors; SEMI; sub = top_level
+        { let open Ast in (TyDef { name; constructors })::sub}
+    | name = ID; TYPE; ty = ty; SEMI; sub = top_level
+        { let open Ast in (DeclTy { name; ty })::sub }
+    | name = ID; EQ; expr = expr; SEMI; sub = top_level {
+        let open Ast in (Decl { name; expr })::sub
     }
     | EOF { [] }

@@ -1,18 +1,18 @@
 (library
  (name stack_first_language)
-
  (inline_tests)
  (preprocess
   (pps ppx_inline_test ppx_deriving.show))
-
- (libraries menhirLib ppx_inline_test))
+ (libraries menhirLib ppx_inline_test core))
 
 (rule
  (targets parser.ml parser.mli)
  (deps parser.mly)
- (action (run menhir --base parser %{deps})))
+ (action
+  (run menhir --base parser %{deps})))
 
 (rule
  (targets lexer.ml)
  (deps lexer.mll)
- (action (run ocamllex %{deps})))
+ (action
+  (run ocamllex %{deps})))

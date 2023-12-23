@@ -3,23 +3,32 @@
 }
 
 let digit = ['0'-'9']
-let ws =  [' ' '\t' '\n']
-let nws = [^ ' ' '\t' '\n']
+let whitespace = [' ' '\t' '\n' '\r']
+let id = [^ ' ' '\t' '\n' '\r' '\\' '(' ')' '=' ',' ':' ';' '|']+
 
 rule token = parse
-    | ws+                  { token lexbuf } (* This is as simple as a recursive call *)
-    | digit+ as number     { INT(int_of_string number) }
-    | ":="                 { WALRUS }
-    | ':'                  { COLON }
-    | ','                  { COMMA }
-    | '['                  { RBRACKET }
-    | ']'                  { LBRACKET }
-    | '('                  { RPAREN }
-    | ')'                  { LPAREN }
-    | "if"                 { IF }
-    | "then"               { THEN }
-    | "else"               { ELSE }
-    | (['A'-'Z']nws*) as s { CONSTRUCTOR(s) }
-    | (['a'-'z']nws*) as s { ID(s) }
-    | eof                  { EOF }
-
+  | whitespace+       { token lexbuf }   (* Skip whitespace *)
+  | "if"   { IF }
+  | "then" { THEN }
+  | "else" { ELSE }
+  | "data" { DATA }
+  | "let"  { LET }
+  | "in"   { IN }
+  | '\\'   { FUN }
+  | '('    { LPAR }
+  | ')'    { RPAR }
+  | '='    { EQ }
+  | ','    { COMMA }
+  | "::"   { TYPE }
+  | '|'    { OR }
+  | ';'    { SEMI }
+  | '\'' id as id { TYPE_VAR id }
+  | "->" { ARR }
+  | id as id
+    {
+        let open Core in
+        if String.get id 0 |> Char.is_uppercase then
+            CONSTRUCTOR id
+        else ID id
+    }
+  | eof { EOF }
