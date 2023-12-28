@@ -2,25 +2,26 @@
 %token IF THEN ELSE
 %token LPAR RPAR COMMA
 %token FUN EQ
-%token ARR TYPE OR DATA SEMI
+%token ARR TYPE SPEC_TYPE OR SEMI
 %token EOF
 
 %token <string> ID CONSTRUCTOR TYPE_VAR
 
 %type <unit> maybe_or
 
-%type <Ast.constructor_def list> constructors
+%type <(string Ast.constructor_def) list> constructors
 
-%type <Ast.tuple_ty> ty_tuple_inner
-%type <Ast.ty> ty ty_factor
+%type <string list> n_ty_vars
+%type <string Ast.tuple_ty> ty_tuple_inner
+%type <string Ast.ty> ty ty_factor
 
-%type  <Ast.expr> expr
+%type  <string Ast.expr> expr
 
-%type <Ast.tuple_expr> tuple_inner
+%type <string Ast.tuple_expr> tuple_inner
 
-%start <Ast.ty> test_ty
-%start <Ast.stmt list> top_level
-%start <Ast.expr> test_expr
+%start <string Ast.ty> test_ty
+%start <string Ast.stmt list> top_level
+%start <string Ast.expr> test_expr
 
 %left FUN
 %left LET
@@ -51,11 +52,14 @@ ty_factor:
         { let open Ast in Var $1 }
     | ty = ty_factor; arg = ty_factor %prec TAPP
         { let open Ast in Applicative { ty; arg } }
-
 ty:
     | ty_factor { $1 }
     | i = ty; ARR; o = ty
         { let open Ast in Arrow { i; o } }
+
+n_ty_vars:
+    | TYPE_VAR; n_ty_vars { $1 :: $2 }
+    | { [] }
 
 constructors:
     | constructor = CONSTRUCTOR; ty = ty
@@ -81,7 +85,7 @@ expr:
         { $2 }
     | LET; name = ID; EQ; value = expr; IN; within = expr;
         { let open Ast in Bind { name; value; within } }
-    | FUN; binding = ID; content = expr %prec FUN 
+    | FUN; binding = ID; content = expr %prec FUN
         { let open Ast in Lambda { binding; content } }
     | callee = expr; arg = expr %prec APP
         { let open Ast in Call { callee; arg } }
@@ -99,9 +103,9 @@ maybe_or:
     | { () }
 
 top_level:
-    | DATA; name = ID; maybe_or; constructors = constructors; SEMI; sub = top_level
-        { let open Ast in (TyDef { name; constructors })::sub}
-    | name = ID; TYPE; ty = ty; SEMI; sub = top_level
+    | TYPE; name = ID; vars = n_ty_vars; EQ; maybe_or; constructors = constructors; SEMI; sub = top_level
+        { let open Ast in (TyDef { name; vars; constructors })::sub}
+    | name = ID; SPEC_TYPE; ty = ty; SEMI; sub = top_level
         { let open Ast in (DeclTy { name; ty })::sub }
     | name = ID; EQ; expr = expr; SEMI; sub = top_level {
         let open Ast in (Decl { name; expr })::sub

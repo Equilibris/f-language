@@ -11,7 +11,7 @@ rule token = parse
   | "if"   { IF }
   | "then" { THEN }
   | "else" { ELSE }
-  | "data" { DATA }
+  | "type" { TYPE }
   | "let"  { LET }
   | "in"   { IN }
   | '\\'   { FUN }
@@ -19,10 +19,10 @@ rule token = parse
   | ')'    { RPAR }
   | '='    { EQ }
   | ','    { COMMA }
-  | "::"   { TYPE }
+  | "::"   { SPEC_TYPE }
   | '|'    { OR }
   | ';'    { SEMI }
-  | '\'' id as id { TYPE_VAR id }
+  | '\'' id as id { TYPE_VAR (String.to_seq id |> Seq.drop 1 |> String.of_seq) }
   | "->" { ARR }
   | id as id
     {
