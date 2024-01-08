@@ -30,7 +30,7 @@ module Namespace = struct
     let s2i = Map.empty (module String) in
     { i2s; s2i; req = s2i; i = 0 }
 
-  let name_mapper ({ i2s; s2i; i; req } as id) name =
+  let resolve ({ i2s; s2i; i; req } as id) name =
     match (Map.find s2i name, Map.find req name) with
     | None, Some v -> (id, v)
     | None, None ->
@@ -43,7 +43,7 @@ module Namespace = struct
           i )
     | Some v, _ -> (id, v)
 
-  let name_assigner { i2s; s2i; i; req } name =
+  let assign { i2s; s2i; i; req } name =
     match Map.find req name with
     | Some v ->
         ( {
@@ -85,7 +85,7 @@ open Namespace
 
 let rec expr_name_mapper ens = function
   | Id name ->
-      let ens, name = name_mapper ens name in
+      let ens, name = resolve ens name in
       (ens, Id name)
   | Bind { name; value; within } ->
       let ens, value = expr_name_mapper ens value in
@@ -97,7 +97,7 @@ let rec expr_name_mapper ens = function
       let ens, content = expr_name_mapper ens content in
       (ens, Lambda { binding; content })
   | Constructor (name, value) ->
-      let ens, name = name_mapper ens name in
+      let ens, name = resolve ens name in
       let ens, value = expr_name_mapper ens value in
       (ens, Constructor (name, value))
   | Condition { predicate; t_branch; f_branch } ->
@@ -122,10 +122,10 @@ let rec expr_name_mapper ens = function
 
 let rec ty_name_mapper tns = function
   | Var name ->
-      let tns, name = name_mapper tns name in
+      let tns, name = resolve tns name in
       (tns, Var name)
   | Id name ->
-      let tns, name = name_mapper tns name in
+      let tns, name = resolve tns name in
       (tns, Id name)
   | Applicative { ty; arg } ->
       let tns, ty = ty_name_mapper tns ty in
@@ -150,11 +150,11 @@ let rec top_level_name_mapper ~ens ~tns = function
       let ens, tns, value =
         match curr with
         | Decl { name; expr } ->
-            let ens, name = name_assigner ens name in
-            let ens, expr = expr_name_mapper ens expr in
-            (ens, tns, Decl { name; expr })
+            let ens, name = assign ens name in
+            let nens, expr = expr_name_mapper ens expr in
+            (scope ens nens, tns, Decl { name; expr })
         | TyDef { name; vars; constructors } ->
-            let tns, name = name_assigner tns name in
+            let tns, name = assign tns name in
             let ntns, vars =
               List.fold ~init:(tns, [])
                 ~f:(fun (tns, vars) var ->
@@ -165,7 +165,7 @@ let rec top_level_name_mapper ~ens ~tns = function
             let ens, ntns, constructors =
               List.fold ~init:(ens, ntns, [])
                 ~f:(fun (ens, tns, cons) { constructor; ty } ->
-                  let ens, constructor = name_assigner ens constructor in
+                  let ens, constructor = assign ens constructor in
                   let tns, ty = ty_name_mapper tns ty in
                   (ens, tns, { constructor; ty } :: cons))
                 constructors
@@ -180,17 +180,17 @@ let rec top_level_name_mapper ~ens ~tns = function
   | [] -> (ens, tns, [])
 
 module Tests = struct
-  let boot code =
-    let code = Parser_tests.test_parse Parser.top_level code in
+  open Core.Poly
 
-    let ens, tns, result =
-      top_level_name_mapper ~tns:string_namespace ~ens:string_namespace code
-    in
-    (ens, tns, result)
+  let convert code =
+    top_level_name_mapper ~tns:string_namespace ~ens:string_namespace code
+
+  let parse_and_convert code =
+    convert (Parser_tests.test_parse Parser.top_level code)
 
   let print_src_kvs code =
-    let ens, tns, result = boot code in
-    List.iter ~f:(fun x -> stmt_to_src Int.to_string x |> print_endline) result;
+    let ens, tns, result = parse_and_convert code in
+    stmts_to_src Int.to_string result |> print_endline;
     Printf.printf "\n";
     i2s ens
     |> Map.iteri ~f:(fun ~key ~data -> Printf.printf "%i = %s\n%!" key data);
@@ -198,18 +198,67 @@ module Tests = struct
     i2s tns
     |> Map.iteri ~f:(fun ~key ~data -> Printf.printf "%i = %s\n%!" key data)
 
-  let%test_unit _ =
-    print_src_kvs
-      {|
-        type boolean = True () | False ();
-        true = True ();
-        false = False ();
-        type boolean = True () | False ();
+  (* let _ = let _,_,  *)
+  (*     top_level_name_mapper ~tns:string_namespace ~ens:string_namespace  *)
 
-        x = \x y x;
-        y = \y x y;
+  (* let%test_unit _ = *)
+  (*   Parser_tests.test_parse Parser.top_level {|x = \x y x;y = \y x y;|} *)
+  (*   |> List.map ~f:(show_stmt Format.pp_print_string) *)
+  (*   |> List.iter ~f:print_endline *)
 
-        type nat = Zero () | Succ nat;
-        type list 'a = Nil () | V ('a, list 'a);
-      |}
+  let rec_test = {|x = \x y x;y = \y x y;|}
+
+  let%test _ =
+    let _, _, res = parse_and_convert rec_test in
+    res
+    = [
+        Decl
+          {
+            name = 0;
+            expr =
+              Lambda
+                {
+                  Ast.binding = 1;
+                  content = Call { callee = Id 2; arg = Id 1 };
+                };
+          };
+        Decl
+          {
+            name = 2;
+            expr =
+              Lambda
+                { binding = 3; content = Call { callee = Id 0; arg = Id 3 } };
+          };
+      ]
+
+  let%test _ =
+    let _, _, res = parse_and_convert {|type bool = True () | False (); |} in
+    res
+    = [
+        TyDef
+          {
+            name = 0;
+            vars = [];
+            constructors =
+              [
+                { constructor = 0; ty = TupleTy [] };
+                { constructor = 1; ty = TupleTy [] };
+              ];
+          };
+      ]
+
+  (* let%test_unit _ = *)
+  (*   print_src_kvs *)
+  (* {| *)
+     (*       type boolean = True () | False (); *)
+     (*       true = True (); *)
+     (*       type boolean = True () | False (); *)
+
+     (*       false = False (); *)
+     (*       x = \x y x; *)
+     (*       y = \y x y; *)
+
+     (*       type nat = Zero () | Succ nat; *)
+     (*       type list 'a = Nil () | V ('a, list 'a); *)
+     (*     |} *)
 end

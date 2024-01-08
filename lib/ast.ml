@@ -103,7 +103,7 @@ let stmt_to_src show_a = function
   | Decl { name; expr } ->
       Printf.sprintf "%s = %s;" (show_a name) (expr_to_src show_a expr)
   | TyDef { name; vars; constructors } ->
-      Printf.sprintf "type %s %s=%s" (show_a name)
+      Printf.sprintf "type %s %s=%s;" (show_a name)
         (List.map ~f:(fun v -> Printf.sprintf "'%s " (show_a v)) vars
         |> String.concat)
         (List.map
@@ -113,4 +113,6 @@ let stmt_to_src show_a = function
            constructors
         |> String.concat)
   | DeclTy { name; ty } ->
-      Printf.sprintf "%s :: %s" (show_a name) (ty_to_src show_a ty)
+      Printf.sprintf "%s :: %s;" (show_a name) (ty_to_src show_a ty)
+
+let stmts_to_src show_a v = List.map v ~f:(stmt_to_src show_a) |> String.concat
