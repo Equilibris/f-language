@@ -63,11 +63,6 @@ let rec expr_name_mapper ens = function
       let ens, name = resolve ens name in
       let ens, value = expr_name_mapper ens value in
       (ens, Constructor (name, value))
-  | Condition { predicate; t_branch; f_branch } ->
-      let ens, predicate = expr_name_mapper ens predicate in
-      let ens, t_branch = expr_name_mapper ens t_branch in
-      let ens, f_branch = expr_name_mapper ens f_branch in
-      (ens, Condition { predicate; t_branch; f_branch })
   | Call { callee; arg } ->
       let ens, callee = expr_name_mapper ens callee in
       let ens, arg = expr_name_mapper ens arg in

@@ -15,10 +15,6 @@ let code_array_transform i code =
     | Match (value, arms) ->
         marcher target value;
         List.iter ~f:(fun (_, v) -> marcher target v) arms
-    | Condition { predicate; t_branch; f_branch } ->
-        marcher target predicate;
-        marcher target t_branch;
-        marcher target f_branch
     | Call { callee; arg } ->
         marcher target callee;
         marcher target arg

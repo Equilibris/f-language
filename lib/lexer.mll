@@ -10,9 +10,6 @@ rule token = parse
   | whitespace+       { token lexbuf }   (* Skip whitespace *)
   | "with"  { WITH }
   | "match" { MATCH }
-  | "if"    { IF   }
-  | "then"  { THEN }
-  | "else"  { ELSE }
   | "type"  { TYPE }
   | "let"   { LET }
   | "in"    { IN }

@@ -44,11 +44,6 @@ module Expr = struct
 
   let () =
     assert (
-      "if a then b else c"
-      = Condition { predicate = Id "a"; t_branch = Id "b"; f_branch = Id "c" })
-
-  let () =
-    assert (
       "match true with | True () -> hello | False () -> no"
       = Match
           ( Id "true",
@@ -60,9 +55,6 @@ module Expr = struct
   let () = assert ("match () with | () -> ()" == "match () with () -> ()")
   let () = assert ("add one let v = one in v" == "(add one) (let v = one in v)")
   let () = assert ("add one \\v v" == "(add one) (\\v v)")
-
-  let () =
-    assert ("add one if v then v else v" == "(add one) (if v then v else v)")
 
   (* TODO: fix precidence *)
   (* let () = *)
@@ -78,14 +70,6 @@ module Expr = struct
   (*           callee = Call { callee = Id "add"; arg = Id "one" }; *)
   (*           arg = Match (Tuple [], [ (TuplePat [], Tuple []) ]); *)
   (*         }) *)
-
-  let () =
-    assert (
-      "Hello if a then b else c"
-      = Constructor
-          ( "Hello",
-            Condition
-              { predicate = Id "a"; t_branch = Id "b"; f_branch = Id "c" } ))
 end
 
 module Pat = struct

@@ -1,5 +1,5 @@
 %token LET IN
-%token IF THEN ELSE MATCH WITH
+%token MATCH WITH
 %token LPAR RPAR COMMA
 %token FUN EQ
 %token ARR TYPE SPEC_TYPE OR SEMI
@@ -109,8 +109,6 @@ expr_atom:
 expr:
     | id = CONSTRUCTOR; expr = expr
         { Irs.Ast.(Constructor (id, expr)) }
-    | IF; predicate = expr; THEN; t_branch = expr; ELSE; f_branch = expr
-        { Irs.Ast.(Condition { predicate; t_branch; f_branch; }) }
     | LPAR; fst = expr; COMMA; cont = tuple_inner; RPAR
         { Irs.Ast.(Tuple (fst :: cont)) }
     | LET; name = ID; EQ; value = expr; IN; within = expr;
