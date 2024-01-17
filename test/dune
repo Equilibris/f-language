@@ -1,2 +1,5 @@
-(test
- (name test_stack_first_language))
+(include_subdirs qualified)
+
+(tests
+ (libraries stack_first_language)
+ (names test_stack_first_language))

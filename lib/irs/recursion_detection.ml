@@ -12,6 +12,9 @@ let code_array_transform i code =
         deps.(target) <- name :: deps.(target);
         code_map.(name) <- Some value;
         marcher name within
+    | Match (value, arms) ->
+        marcher target value;
+        List.iter ~f:(fun (_, v) -> marcher target v) arms
     | Condition { predicate; t_branch; f_branch } ->
         marcher target predicate;
         marcher target t_branch;
@@ -51,29 +54,6 @@ let code_array_transform i code =
       code_map,
     deps )
 
-module IndexSet : sig
-  type ('a, 'cmp) t
-
-  val empty : ('a, 'b) Base.Comparator.Module.t -> ('a, 'b) t
-  val enqueue : ('a, 'b) t -> 'a -> ('a, 'b) t
-  val pop : ('a, 'b) t -> 'a option * ('a, 'b) t
-  val mem : ('a, 'b) t -> 'a -> bool
-end = struct
-  (* Leaves an implicit assumtion that each enqueued entry is unique as if
-     you enqueue the same value twice then pop it it will leave the
-     invariant that a value is in both the set and the list unsatasfied *)
-  type ('a, 'cmp) t = 'a list * ('a, 'cmp) Base.Set.t
-
-  let empty m = ([], Base.Set.empty m)
-  let enqueue (xs, set) value = (value :: xs, Base.Set.add set value)
-  let mem (_, set) value = Base.Set.mem set value
-
-  let pop ((xs, set) as v) =
-    match xs with
-    | [] -> (None, v)
-    | x :: xs -> (Some x, (xs, Base.Set.remove set x))
-end
-
 (* Would be trivial to caclulate all recursive
    paths rather than just a t/f value *)
 let recalculate_recursion deps =
@@ -82,46 +62,17 @@ let recalculate_recursion deps =
   let recursive = visited () in
   let rec dfs_iter chain visited i =
     if visited.(i) then ()
-    else if IndexSet.mem chain i then recursive.(i) <- true
+    else if Index_set.mem chain i then recursive.(i) <- true
     else
-      let chain = IndexSet.enqueue chain i in
+      let chain = Index_set.enqueue chain i in
       List.iter ~f:(dfs_iter chain visited) deps.(i);
       visited.(i) <- true
   in
   let rec iter curr =
     if curr = i then ()
     else (
-      dfs_iter (IndexSet.empty (module Int)) (visited ()) curr;
+      dfs_iter (Index_set.empty (module Int)) (visited ()) curr;
       iter (curr + 1))
   in
   iter 0;
   recursive
-
-module Tests = struct
-  open De_bruijn_transform.Tests
-  open Core.Poly
-
-  let%test _ =
-    let ens, _, v = parse_and_convert rec_test in
-    let i = De_bruijn_transform.Namespace.i ens in
-    let tln, code, deps = code_array_transform i v in
-    let recs = recalculate_recursion deps in
-    recs = [| true; false; true; false |]
-    && deps = [| [ 1; 2 ]; []; [ 3; 0 ]; [] |]
-    && tln = [ 2; 0 ]
-    && code
-       = [|
-           Lambda { binding = 1; content = Call { callee = Id 2; arg = Id 1 } };
-           Id 1;
-           Lambda { binding = 3; content = Call { callee = Id 0; arg = Id 3 } };
-           Id 3;
-         |]
-
-  (* let%test_unit _ = *)
-  (*   let ens, _, v = parse_and_convert rec_test in *)
-  (*   let i = De_bruijn_transform.Namespace.i ens in *)
-  (*   let _tln, code, _deps = code_array_transform i v in *)
-  (*   List.of_array code *)
-  (*   |> List.map ~f:(expr_to_src Int.to_string) *)
-  (*   |> String.concat |> print_endline *)
-end

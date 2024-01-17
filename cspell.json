@@ -1,6 +1,11 @@
 {
     "words": [
         "lparen",
-        "rparen"
+        "rparen",
+        "struct",
+        "endline"
+    ],
+    "dictionaries": [
+        "ocaml"
     ]
 }

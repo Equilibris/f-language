@@ -1,0 +1,146 @@
+open Core
+open Ast
+
+(** De Bruijn index Transformations *)
+
+(*
+ TODO:
+ - [ ] Look into using binding overriding to make this code a bit nicer
+ *)
+
+(*
+ Variable name index
+
+ - If a var starts with e or t it is expr or type respectivley
+ - i2s and s2i are int to string and v.v.
+ - xreq is a requests system to manage possibly undefined variables
+ *)
+
+open Namespace
+
+let rec pat_name_mapper ens = function
+  | BindingPat v ->
+      let ens, v = base_bind ens v in
+      (ens, BindingPat v)
+  | TuplePat t ->
+      let ens, t =
+        List.fold ~init:(ens, [])
+          ~f:(fun (ens, last) v ->
+            let ens, v = pat_name_mapper ens v in
+            (ens, v :: last))
+          t
+      in
+      (ens, TuplePat (List.rev t))
+  | LitPat _ as p -> (ens, p)
+  | ConstructorPat (name, value) ->
+      let ens, name = resolve ens name in
+      let ens, value = pat_name_mapper ens value in
+      (ens, ConstructorPat (name, value))
+
+let rec expr_name_mapper ens = function
+  | Bind { name; value; within } ->
+      let ens, value = expr_name_mapper ens value in
+      let* ens, name = (ens, name) in
+      let ens, within = expr_name_mapper ens within in
+      (ens, Bind { name; value; within })
+  | Match (sub, arms) ->
+      let ens, sub = expr_name_mapper ens sub in
+      let ens, arms =
+        List.fold ~init:(ens, [])
+          ~f:(fun (ns, last) (pat, expr) ->
+            let+ ns = ns in
+            let ns, pat = pat_name_mapper ns pat in
+            let ns, expr = expr_name_mapper ns expr in
+            (ns, (pat, expr) :: last))
+          arms
+      in
+      (ens, Match (sub, arms))
+  | Lambda { binding; content } ->
+      let* ens, binding = (ens, binding) in
+      let ens, content = expr_name_mapper ens content in
+      (ens, Lambda { binding; content })
+  | Constructor (name, value) ->
+      let ens, name = resolve ens name in
+      let ens, value = expr_name_mapper ens value in
+      (ens, Constructor (name, value))
+  | Condition { predicate; t_branch; f_branch } ->
+      let ens, predicate = expr_name_mapper ens predicate in
+      let ens, t_branch = expr_name_mapper ens t_branch in
+      let ens, f_branch = expr_name_mapper ens f_branch in
+      (ens, Condition { predicate; t_branch; f_branch })
+  | Call { callee; arg } ->
+      let ens, callee = expr_name_mapper ens callee in
+      let ens, arg = expr_name_mapper ens arg in
+      (ens, Call { callee; arg })
+  | Tuple a ->
+      let ens, a =
+        List.fold ~init:(ens, [])
+          ~f:(fun (ens, last) v ->
+            let ens, v = expr_name_mapper ens v in
+            (ens, v :: last))
+          a
+      in
+      (ens, Tuple (List.rev a))
+  | Lit v -> (ens, Lit v)
+  | Id name ->
+      let ens, name = resolve ens name in
+      (ens, Id name)
+
+let rec ty_name_mapper tns = function
+  | Var name ->
+      let tns, name = resolve tns name in
+      (tns, Var name)
+  | Id name ->
+      let tns, name = resolve tns name in
+      (tns, Id name)
+  | Applicative { ty; arg } ->
+      let tns, ty = ty_name_mapper tns ty in
+      let tns, arg = ty_name_mapper tns arg in
+      (tns, Applicative { ty; arg })
+  | Arrow { i = input; o = output } ->
+      let tns, input = ty_name_mapper tns input in
+      let tns, output = ty_name_mapper tns output in
+      (tns, Arrow { i = input; o = output })
+  | TupleTy tuple ->
+      let tns, a =
+        List.fold ~init:(tns, [])
+          ~f:(fun (tns, last) v ->
+            let tns, v = ty_name_mapper tns v in
+            (tns, v :: last))
+          tuple
+      in
+      (tns, TupleTy (List.rev a))
+
+let rec top_level_name_mapper ~ens ~tns = function
+  | curr :: next ->
+      let ens, tns, value =
+        match curr with
+        | Decl { name; expr } ->
+            let ens, name = assign ens name in
+            let nens, expr = expr_name_mapper ens expr in
+            (scope ens nens, tns, Decl { name; expr })
+        | TyDef { name; vars; constructors } ->
+            let tns, name = assign tns name in
+            let ntns, vars =
+              List.fold ~init:(tns, [])
+                ~f:(fun (tns, vars) var ->
+                  let ns, var = base_bind tns var in
+                  (ns, var :: vars))
+                vars
+            in
+            let ens, ntns, constructors =
+              List.fold ~init:(ens, ntns, [])
+                ~f:(fun (ens, tns, cons) { constructor; ty } ->
+                  let ens, constructor = assign ens constructor in
+                  let tns, ty = ty_name_mapper tns ty in
+                  (ens, tns, { constructor; ty } :: cons))
+                constructors
+            in
+            ( ens,
+              scope tns ntns,
+              TyDef { name; vars; constructors = List.rev constructors } )
+        | DeclTy _ -> (ens, tns, failwith "todo")
+      in
+      let ens, tns, next = top_level_name_mapper ~ens ~tns next in
+      (ens, tns, value :: next)
+  | [] -> (ens, tns, [])

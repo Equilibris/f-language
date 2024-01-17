@@ -1,8 +1,15 @@
+(include_subdirs qualified)
+
 (library
  (name stack_first_language)
  (inline_tests)
  (preprocess
-  (pps ppx_inline_test ppx_deriving.show ppx_jane))
+  (pps
+   ppx_inline_test
+   ppx_deriving.show
+   ppx_deriving.eq
+   ppx_deriving.make
+   ppx_jane))
  (libraries menhirLib ppx_inline_test core))
 
 (rule
@@ -10,6 +17,9 @@
  (deps parser.mly)
  (action
   (run menhir --base parser %{deps})))
+
+; (menhir
+;  (modules parser))
 
 (rule
  (targets lexer.ml)

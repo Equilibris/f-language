@@ -8,20 +8,22 @@ let id = [^ ' ' '\t' '\n' '\r' '\\' '(' ')' '=' ',' ':' ';' '|']+
 
 rule token = parse
   | whitespace+       { token lexbuf }   (* Skip whitespace *)
-  | "if"   { IF }
-  | "then" { THEN }
-  | "else" { ELSE }
-  | "type" { TYPE }
-  | "let"  { LET }
-  | "in"   { IN }
-  | '\\'   { FUN }
-  | '('    { LPAR }
-  | ')'    { RPAR }
-  | '='    { EQ }
-  | ','    { COMMA }
-  | "::"   { SPEC_TYPE }
-  | '|'    { OR }
-  | ';'    { SEMI }
+  | "with"  { WITH }
+  | "match" { MATCH }
+  | "if"    { IF   }
+  | "then"  { THEN }
+  | "else"  { ELSE }
+  | "type"  { TYPE }
+  | "let"   { LET }
+  | "in"    { IN }
+  | '\\'    { FUN }
+  | '('     { LPAR }
+  | ')'     { RPAR }
+  | '='     { EQ }
+  | ','     { COMMA }
+  | "::"    { SPEC_TYPE }
+  | '|'     { OR }
+  | ';'     { SEMI }
   | '\'' id as id { TYPE_VAR (String.to_seq id |> Seq.drop 1 |> String.of_seq) }
   | "->" { ARR }
   | id as id
