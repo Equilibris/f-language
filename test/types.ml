@@ -39,18 +39,19 @@ end
 
 module LambdaNonRec = struct
   let flat = convert {|
-    id = \x x;
-  |}
+       id = \x x;
+     |}
 
   let _ =
     let%map _, _, id_ty = gather_type flat ty_map 0 in
     assert (equal_ty Int.equal id_ty (Arrow { i = Var 0; o = Var 0 }))
 
-  let flat = convert {|
-    id = \x x;
-    id2 = \x id x;
-    id3 = id2;
-  |}
+  let flat =
+    convert {|
+       id = \x x;
+       id2 = \x id x;
+       id3 = id2;
+     |}
 
   let _ =
     let%map flat, _, id_ty = gather_type flat ty_map 0 in
@@ -61,4 +62,28 @@ module LambdaNonRec = struct
       && equal_ty Int.equal id_ty id2_ty
       && equal_ty Int.equal id_ty id3_ty)
   (* show_ty Format.pp_print_int id_ty |> print_endline *)
+end
+
+module Lambda = struct
+  let flat = convert {|
+      loop = \x loop x;
+  |}
+
+  let _ =
+    let%map _, id_ty = gather_top_level flat 0 in
+    let _, id_ty = canonicalize (TypeMap.empty (module Int)) id_ty in
+    assert (equal_ty Int.equal id_ty (Arrow { i = Var 0; o = Var 1 }))
+
+  let flat = convert {|
+      f = \x g x;
+      g = \x f x;
+  |}
+
+  let _ =
+    Map.keys flat.fn_def_map
+    |> List.map ~f:(fun v ->
+           let%map _, ty = gather_top_level flat v in
+           let _, ty = canonicalize (TypeMap.empty (module Int)) ty in
+
+           assert (equal_ty Int.equal ty (Arrow { i = Var 0; o = Var 1 })))
 end

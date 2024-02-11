@@ -119,18 +119,30 @@ let canonicalize ty_map ty =
   in
   traverse ty_map ty
 
-let app flat_ir ty_map t1 t2 =
-  match t1 with
+let rec app flat_ir ty_map fn_ty arg_ty =
+  match fn_ty with
   | Arrow { i; o } ->
-      let%map var_map, _ = unify Int.equal (TypeMap.var_map ty_map) i t2 in
+      let%map var_map, _ = unify Int.equal (TypeMap.var_map ty_map) i arg_ty in
       (* replace_var only maps variable equality as types are strictly distinct *)
       let o = replace_var var_map o in
       (flat_ir, { ty_map with var_map }, o)
+  | Var _ as v ->
+      let ty_map, i = TypeMap.bind_var ty_map in
+      let ty_map, o = TypeMap.bind_var ty_map in
+      let i_type = Arrow { i; o } in
+      let%bind var_map, _ = unify Int.equal (TypeMap.var_map ty_map) v i_type in
+
+      app flat_ir { ty_map with var_map } i_type arg_ty
   | _ -> None
 
 let rec gather_type flat_ir ty_map id =
   if TypeMap.mem ty_map id then
-    failwith "TODO: recursion (or mutual recursion) detected"
+    match Map.find ty_map.id_ty_map id with
+    | None ->
+        let ty_map, ty_var = TypeMap.bind_var ty_map in
+        let%map ty_map = TypeMap.set_or_update ty_map id ty_var in
+        (flat_ir, ty_map, ty_var)
+    | Some v -> Some (flat_ir, ty_map, v)
   else
     match Map.find (TypeMap.id_ty_map ty_map) id with
     | Some v -> Some (flat_ir, ty_map, v)
@@ -218,6 +230,36 @@ and type_of_expr flat_ir ty_map nonfree =
       else
         let ty_map, v = canonicalize ty_map v in
         (flat_ir, ty_map, v)
+
+let gather_top_level flat_ir id =
+  let ty_map = TypeMap.empty (module Int) in
+  let%bind flat_ir, ty_map, ty = gather_type flat_ir ty_map id in
+  let l = Ds.Index_set.ls ty_map.stack in
+
+  let rec munch flat_ir = function
+    | [] -> Some (flat_ir, ty)
+    | h :: tl -> (
+        match
+          ( Map.find (TypeMap.id_ty_map ty_map) h,
+            Map.find (Flat.fn_ty_map flat_ir) h )
+        with
+        | Some update, Some curr ->
+            (* We ignore this continuation as it might use differing
+               variables caused by if for example it is once canonicalized
+               yet subsequently not. This might need a fix
+            *)
+            let%bind _, ty = unify Int.equal ty_map.var_map update curr in
+            let flat_ir =
+              {
+                flat_ir with
+                fn_ty_map = Map.set (Flat.fn_ty_map flat_ir) ~key:h ~data:ty;
+              }
+            in
+            munch flat_ir tl
+        | _ -> munch flat_ir tl)
+  in
+
+  munch flat_ir l
 
 module Tests = struct
   open Core.Poly

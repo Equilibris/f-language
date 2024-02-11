@@ -1,28 +1,32 @@
 open Core
 
-type ('a, 'cmp) t = T of 'a list * ('a, int, 'cmp) Map.t
+type ('a, 'cmp) t = { ls : 'a list; map : ('a, int, 'cmp) Map.t }
 
-let empty m = T ([], Map.empty m)
+let empty m = { ls = []; map = Map.empty m }
 
-let enqueue (T (xs, m)) value =
-  T
-    ( value :: xs,
-      Map.update ~f:(Option.value_map ~f:Int.succ ~default:1) m value )
+let enqueue { ls; map } value =
+  {
+    ls = value :: ls;
+    map = Map.update ~f:(Option.value_map ~f:Int.succ ~default:1) map value;
+  }
 
-let last (T (xs, _)) = List.last xs
-let ls (T (xs, _)) = xs
-let mem (T (_, set)) value = Map.mem set value
+(* Can be done in O(1) time with an addition of O(1) mem *)
+let last { ls; map = _ } = List.last ls
+let ls { ls; map = _ } = ls
+let mem { ls = _; map } value = Map.mem map value
 
-let pop (T (xs, set) as v) =
+let pop ({ ls = xs; map = set } as v) =
   match xs with
   | [] -> (None, v)
   | x :: xs ->
       ( Some x,
-        T
-          ( xs,
+        {
+          ls = xs;
+          map =
             Map.change
               ~f:(fun v ->
                 v
                 |> Option.map ~f:(fun x -> x - 1)
                 |> Option.filter ~f:Int.is_positive)
-              set x ) )
+              set x;
+        } )
