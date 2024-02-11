@@ -14,14 +14,14 @@
 %type <string list> n_ty_vars
 %type <string Irs.Ast.tuple_ty> ty_tuple_inner
 %type <string Irs.Ast.ty> ty ty_factor
-%type <string Irs.Ast.pat_arm list> match_inner
+%type <(string, string Irs.Ast.expr) Irs.Ast.pat_arm list> match_inner
 
 %type<string Irs.Ast.pat list> pat_tuple_inner pat_tuple
 %type<string Irs.Ast.pat> pat
 
 %type  <string Irs.Ast.expr> expr expr_atom
 
-%type <string Irs.Ast.tuple_expr> tuple_inner
+%type <string Irs.Ast.expr Irs.Ast.tuple_expr> tuple_inner
 
 %start <string Irs.Ast.ty> test_ty
 %start <string Irs.Ast.pat> test_pat
@@ -104,7 +104,7 @@ expr_atom:
         { $2 }
     | ID { Irs.Ast.(Id $1) }
     | MATCH; expr; WITH; maybe_or; pat; ARR; expr; match_inner
-        { Irs.Ast.(Match ($2, ($5, $7) :: $8)) }
+        { Irs.Ast.(Match { scrutinee = $2; arms = ($5, $7) :: $8}) }
 
 expr:
     | id = CONSTRUCTOR; expr = expr

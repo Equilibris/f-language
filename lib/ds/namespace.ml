@@ -1,9 +1,9 @@
 open Core
 
-type ('a, 'b, 'c) t = {
-  i2s : (int, 'a, 'b) Base.Map.t;
-  s2i : ('a, int, 'c) Base.Map.t;
-  req : ('a, int, 'c) Base.Map.t;
+type ('key, 'i_cmp, 'k_cmp) t = {
+  i2s : (int, 'key, 'i_cmp) Base.Map.t;
+  s2i : ('key, int, 'k_cmp) Base.Map.t;
+  req : ('key, int, 'k_cmp) Base.Map.t;
   i : int; [@default 0]
 }
 [@@deriving fields, make]
@@ -49,9 +49,10 @@ let scope { s2i; i2s = _; i = _; req = _ } ns = { ns with s2i }
 
 let scopef ns f =
   let nns, v = f ns in
-  (scope nns ns, v)
+  (scope ns nns, v)
 
-let base_bind { i2s; s2i; i; req } name =
+(** Unsafely binds the key  *)
+let bind { i2s; s2i; i; req } name =
   ( {
       i2s = Map.set ~key:i ~data:name i2s;
       s2i = Map.set ~key:name ~data:i s2i;
@@ -60,10 +61,4 @@ let base_bind { i2s; s2i; i; req } name =
     },
     i )
 
-let bind (ns, name) within =
-  let ns, i = base_bind ns name in
-  let nns, v = within (ns, i) in
-  (scope ns nns, v)
-
-let ( let* ) = bind
 let ( let+ ) = scopef

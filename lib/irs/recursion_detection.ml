@@ -1,19 +1,19 @@
 open Core
 open Ast
+open Ds
 
 let code_array_transform i code =
   let code_map = Array.init i ~f:(fun _ -> None) in
   let deps = Array.init i ~f:(fun _ -> []) in
   let rec marcher target = function
-    | Lit _ -> ()
-    | Id v -> deps.(target) <- v :: deps.(target)
     | Tuple xs -> List.iter ~f:(marcher target) xs
+    | Id v -> deps.(target) <- v :: deps.(target)
     | Bind { name; value; within } ->
         deps.(target) <- name :: deps.(target);
         code_map.(name) <- Some value;
         marcher name within
-    | Match (value, arms) ->
-        marcher target value;
+    | Match { scrutinee; arms } ->
+        marcher target scrutinee;
         List.iter ~f:(fun (_, v) -> marcher target v) arms
     | Call { callee; arg } ->
         marcher target callee;

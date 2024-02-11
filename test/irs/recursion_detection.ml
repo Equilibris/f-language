@@ -1,6 +1,7 @@
 open De_burijn_transform
 open Core.Poly
 open Stack_first_language.Irs
+open Stack_first_language.Ds
 open Recursion_detection
 
 let _ =

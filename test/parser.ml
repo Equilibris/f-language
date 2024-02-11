@@ -46,11 +46,14 @@ module Expr = struct
     assert (
       "match true with | True () -> hello | False () -> no"
       = Match
-          ( Id "true",
-            [
-              (ConstructorPat ("True", TuplePat []), Id "hello");
-              (ConstructorPat ("False", TuplePat []), Id "no");
-            ] ))
+          {
+            scrutinee = Id "true";
+            arms =
+              [
+                (ConstructorPat ("True", TuplePat []), Id "hello");
+                (ConstructorPat ("False", TuplePat []), Id "no");
+              ];
+          })
 
   let () = assert ("match () with | () -> ()" == "match () with () -> ()")
   let () = assert ("add one let v = one in v" == "(add one) (let v = one in v)")

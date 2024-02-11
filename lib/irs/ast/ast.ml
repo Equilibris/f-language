@@ -12,3 +12,6 @@ include Pat
  *)
 
 let stmts_to_src show_a v = List.map v ~f:(stmt_to_src show_a) |> String.concat
+
+let show_stmts v ls =
+  List.map ~f:(show_stmt v) ls |> List.intersperse ~sep:"\n" |> String.concat

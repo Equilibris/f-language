@@ -1,4 +1,4 @@
-type ('a, 'b, 'c) t
+type ('key, 'i_cmp, 'k_cmp) t
 
 val make :
   i2s:(int, 'a, 'b) Base.Map.t ->
@@ -479,22 +479,13 @@ val scope : ('a, 'b, 'c) t -> ('a, 'd, 'c) t -> ('a, 'd, 'c) t
 
 val scopef :
   ('a, 'b, 'c) t ->
-  (('a, 'b, 'c) t -> ('a, 'd, 'c) t * 'e) ->
+  (('a, 'b, 'c) t -> ('a, 'b, 'c) t * 'e) ->
   ('a, 'b, 'c) t * 'e
 
-val base_bind : ('a, 'b, 'c) t -> 'a -> ('a, 'b, 'c) t * int
-
-val bind :
-  ('a, 'b, 'c) t * 'a ->
-  (('a, 'b, 'c) t * int -> ('a, 'd, 'c) t * 'e) ->
-  ('a, 'd, 'c) t * 'e
-
-val ( let* ) :
-  ('a, 'b, 'c) t * 'a ->
-  (('a, 'b, 'c) t * int -> ('a, 'd, 'c) t * 'e) ->
-  ('a, 'd, 'c) t * 'e
+val bind : ('a, 'b, 'c) t -> 'a -> ('a, 'b, 'c) t * int
+(** Unsafely binds the key to namespace without respecting scope *)
 
 val ( let+ ) :
   ('a, 'b, 'c) t ->
-  (('a, 'b, 'c) t -> ('a, 'd, 'c) t * 'e) ->
+  (('a, 'b, 'c) t -> ('a, 'b, 'c) t * 'e) ->
   ('a, 'b, 'c) t * 'e

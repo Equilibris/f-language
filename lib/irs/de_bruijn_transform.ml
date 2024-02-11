@@ -16,11 +16,11 @@ open Ast
  - xreq is a requests system to manage possibly undefined variables
  *)
 
-open Namespace
+open Ds.Namespace
 
 let rec pat_name_mapper ens = function
   | BindingPat v ->
-      let ens, v = base_bind ens v in
+      let ens, v = bind ens v in
       (ens, BindingPat v)
   | TuplePat t ->
       let ens, t =
@@ -40,11 +40,12 @@ let rec pat_name_mapper ens = function
 let rec expr_name_mapper ens = function
   | Bind { name; value; within } ->
       let ens, value = expr_name_mapper ens value in
-      let* ens, name = (ens, name) in
+      let+ ens = ens in
+      let ens, name = bind ens name in
       let ens, within = expr_name_mapper ens within in
       (ens, Bind { name; value; within })
-  | Match (sub, arms) ->
-      let ens, sub = expr_name_mapper ens sub in
+  | Match { scrutinee; arms } ->
+      let ens, scrutinee = expr_name_mapper ens scrutinee in
       let ens, arms =
         List.fold ~init:(ens, [])
           ~f:(fun (ns, last) (pat, expr) ->
@@ -54,9 +55,10 @@ let rec expr_name_mapper ens = function
             (ns, (pat, expr) :: last))
           arms
       in
-      (ens, Match (sub, arms))
+      (ens, Match { scrutinee; arms = List.rev arms })
   | Lambda { binding; content } ->
-      let* ens, binding = (ens, binding) in
+      let+ ens = ens in
+      let ens, binding = bind ens binding in
       let ens, content = expr_name_mapper ens content in
       (ens, Lambda { binding; content })
   | Constructor (name, value) ->
@@ -76,7 +78,6 @@ let rec expr_name_mapper ens = function
           a
       in
       (ens, Tuple (List.rev a))
-  | Lit v -> (ens, Lit v)
   | Id name ->
       let ens, name = resolve ens name in
       (ens, Id name)
@@ -119,7 +120,7 @@ let rec top_level_name_mapper ~ens ~tns = function
             let ntns, vars =
               List.fold ~init:(tns, [])
                 ~f:(fun (tns, vars) var ->
-                  let ns, var = base_bind tns var in
+                  let ns, var = bind tns var in
                   (ns, var :: vars))
                 vars
             in

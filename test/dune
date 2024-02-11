@@ -1,5 +1,7 @@
 (include_subdirs qualified)
 
 (tests
+ (preprocess
+  (pps ppx_jane))
  (libraries stack_first_language)
  (names test_stack_first_language))

@@ -10,14 +10,15 @@ type 'a ty_def = {
 
 and 'a constructor_def = { constructor : 'a; ty : 'a ty } [@@deriving show]
 
-type 'a decl_stmt = { name : 'a; expr : 'a expr } [@@deriving show]
+type ('a, 'expr) decl_stmt = { name : 'a; expr : 'expr } [@@deriving show]
 type 'a decl_ty_stmt = { name : 'a; ty : 'a ty } [@@deriving show]
 
-type 'a stmt =
-  | Decl of 'a decl_stmt
+type ('a, 'expr) top_level =
+  | Decl of ('a, 'expr) decl_stmt
   | DeclTy of 'a decl_ty_stmt
   | TyDef of 'a ty_def
-[@@deriving show]
+
+and 'a stmt = ('a, 'a expr) top_level [@@deriving show]
 
 let stmt_to_src show_a = function
   | Decl { name; expr } ->

@@ -1,7 +1,7 @@
 open Core
 open Core.Poly
 open Stack_first_language.Irs.De_bruijn_transform
-open Stack_first_language.Irs.Namespace
+open Stack_first_language.Ds.Namespace
 open Stack_first_language.Irs.Ast
 
 let convert code =
@@ -20,7 +20,7 @@ let print_src_kvs code =
   i2s tns
   |> Map.iteri ~f:(fun ~key ~data -> Printf.printf "%i = %s\n%!" key data)
 
-(* let _ = let _,_,  *)
+(* let () =  let _,_,  *)
 (*     top_level_name_mapper ~tns:string_namespace ~ens:string_namespace  *)
 
 (* let%test_unit _ = *)
@@ -30,7 +30,7 @@ let print_src_kvs code =
 
 let rec_test = {|x = \x y x;y = \y x y;|}
 
-let _ =
+let () =
   let _, _, res = parse_and_convert rec_test in
   assert (
     res
@@ -51,7 +51,7 @@ let _ =
           };
       ])
 
-let _ =
+let () =
   let _, _, res = parse_and_convert {|type bool = True () | False (); |} in
   assert (
     res
@@ -65,6 +65,42 @@ let _ =
                 { constructor = 0; ty = TupleTy [] };
                 { constructor = 1; ty = TupleTy [] };
               ];
+          };
+      ])
+
+let () =
+  let _, _, res =
+    parse_and_convert
+      {|
+        v = match x with
+            | x -> x
+            | x -> x
+            | Const x -> x
+            | (x, y) -> x y
+            | y -> x y;
+      |}
+  in
+
+  assert (
+    res
+    = [
+        Decl
+          {
+            name = 0;
+            expr =
+              Match
+                {
+                  scrutinee = Id 1;
+                  arms =
+                    [
+                      (BindingPat 2, Id 2);
+                      (BindingPat 3, Id 3);
+                      (ConstructorPat (4, BindingPat 5), Id 5);
+                      ( TuplePat [ BindingPat 6; BindingPat 7 ],
+                        Call { callee = Id 6; arg = Id 7 } );
+                      (BindingPat 8, Call { callee = Id 1; arg = Id 8 });
+                    ];
+                };
           };
       ])
 
