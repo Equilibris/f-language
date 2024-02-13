@@ -1,6 +1,6 @@
 open! Format
-open! Stack_first_language
-open! Stack_first_language.Irs.Ast
+open! Flang
+open! Flang.Irs.Ast
 
 let test_parse parser str =
   let lex = Lexing.from_string str in

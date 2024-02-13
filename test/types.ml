@@ -1,6 +1,6 @@
 open! Core
-open Stack_first_language.Types
-open Stack_first_language.Irs.Ast
+open Flang.Types
+open Flang.Irs.Ast
 open Irs.Flat
 open Core.Option.Let_syntax
 
@@ -86,4 +86,14 @@ module Lambda = struct
            let _, ty = canonicalize (TypeMap.empty (module Int)) ty in
 
            assert (equal_ty Int.equal ty (Arrow { i = Var 0; o = Var 1 })))
+end
+
+module FixedPoint = struct
+  let flat = convert {|
+      f = \x (x, f x);
+  |}
+
+  let _ =
+    let%map _, ty = gather_top_level flat 0 in
+    show_ty Format.pp_print_int ty |> print_endline
 end

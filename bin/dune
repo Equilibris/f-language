@@ -1,4 +1,4 @@
 (executable
- (public_name stack_first_language)
+ (public_name flang)
  (name main)
- (libraries stack_first_language))
+ (libraries flang))

@@ -1,14 +1,14 @@
 open Core
 open Core.Poly
-open Stack_first_language.Irs.De_bruijn_transform
-open Stack_first_language.Ds.Namespace
-open Stack_first_language.Irs.Ast
+open Flang.Irs.De_bruijn_transform
+open Flang.Ds.Namespace
+open Flang.Irs.Ast
 
 let convert code =
   top_level_name_mapper ~tns:string_namespace ~ens:string_namespace code
 
 let parse_and_convert code =
-  convert (Parser.test_parse Stack_first_language.Parser.top_level code)
+  convert (Parser.test_parse Flang.Parser.top_level code)
 
 let print_src_kvs code =
   let ens, tns, result = parse_and_convert code in

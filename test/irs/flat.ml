@@ -1,7 +1,7 @@
 open! Core
 open De_burijn_transform
-open Stack_first_language.Irs.Flat
-open Stack_first_language.Irs.Ast
+open Flang.Irs.Flat
+open Flang.Irs.Ast
 
 let convert = Fn.compose of_ens_tns_stream parse_and_convert
 let ty_value = convert "type bool = True () | False ();"
