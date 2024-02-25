@@ -104,6 +104,21 @@ let () =
           };
       ])
 
+(* let _ = *)
+(*   let _, _, res = parse_and_convert {| f = \f \x f x; |} in *)
+(*   show_stmts Format.pp_print_int res |> print_endline *)
+
+(* let _ = *)
+(*   let _, _, res = *)
+(*     parse_and_convert *)
+(* {| *)
+   (*      type list 'a = Nil () | Cons ('a, list 'a); *)
+
+   (*      map = \f \x match x with | Nil _ -> Nil () | Cons (v, x) -> Cons(f v, map f x); *)
+   (*   |} *)
+(*   in *)
+(*   show_stmts Format.pp_print_int res |> print_endline *)
+
 (* let%test_unit _ = *)
 (*   print_src_kvs *)
 (* {| *)

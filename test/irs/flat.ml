@@ -4,7 +4,12 @@ open Flang.Irs.Flat
 open Flang.Irs.Ast
 
 let convert = Fn.compose of_ens_tns_stream parse_and_convert
-let ty_value = convert "type bool = True () | False ();"
+
+let convert_with_map x =
+  let ens, tns, v = parse_and_convert x in
+  (ens, of_ens_tns_stream (ens, tns, v))
+
+let ty_value = convert "type bool = True () | False (); type x = X ((), ((),));"
 
 let () =
   assert (
@@ -14,10 +19,8 @@ let () =
          [
            (0, Arrow { i = TupleTy []; o = Id 0 });
            (1, Arrow { i = TupleTy []; o = Id 0 });
+           ( 2,
+             Arrow
+               { i = TupleTy [ TupleTy []; TupleTy [ TupleTy [] ] ]; o = Id 1 }
+           );
          ])
-
-(* let () = *)
-(*   Map.to_alist ty_value.ty_def_map *)
-(*   |> List.map ~f:(fun (name, y) -> *)
-(*          Printf.sprintf "%i : %s" name (show_ty_def Format.pp_print_int y)) *)
-(*   |> String.concat ~sep:"\n" |> print_endline *)

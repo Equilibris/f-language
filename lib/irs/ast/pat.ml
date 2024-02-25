@@ -6,7 +6,6 @@ and 'a tuple_pat = 'a pat list
 and 'a pat =
   | BindingPat of 'a
   | TuplePat of 'a tuple_pat
-  | LitPat of int
   | ConstructorPat of 'a constructor_pat
 [@@deriving show, eq]
 
@@ -16,6 +15,5 @@ let rec pat_to_src show_a = function
       "("
       ^ (List.map ~f:(fun v -> pat_to_src show_a v ^ ", ") v |> String.concat)
       ^ ")"
-  | LitPat v -> Int.to_string v
   | ConstructorPat (constructor, children) ->
       show_a constructor ^ "(" ^ pat_to_src show_a children ^ ")"

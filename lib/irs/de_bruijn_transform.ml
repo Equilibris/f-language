@@ -31,7 +31,6 @@ let rec pat_name_mapper ens = function
           t
       in
       (ens, TuplePat (List.rev t))
-  | LitPat _ as p -> (ens, p)
   | ConstructorPat (name, value) ->
       let ens, name = resolve ens name in
       let ens, value = pat_name_mapper ens value in
