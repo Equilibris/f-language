@@ -15,13 +15,13 @@ let canonicalize ty_map ty =
         (ty_map, Applicative { ty; arg })
     | TupleTy typ ->
         let ty_map, x =
-          List.fold ~init:(ty_map, [])
-            ~f:(fun (ty_map, last) nx ->
+          List.fold_map ~init:ty_map
+            ~f:(fun ty_map nx ->
               let ty_map, nx = traverse ty_map nx in
-              (ty_map, nx :: last))
+              (ty_map, nx))
             typ
         in
-        (ty_map, TupleTy (List.rev x))
+        (ty_map, TupleTy x)
     | Var v -> (
         match Hashtbl.find imap v with
         | Some v -> (ty_map, v)

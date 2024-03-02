@@ -24,13 +24,13 @@ let rec pat_name_mapper ens = function
       (ens, BindingPat v)
   | TuplePat t ->
       let ens, t =
-        List.fold ~init:(ens, [])
-          ~f:(fun (ens, last) v ->
+        List.fold_map ~init:ens
+          ~f:(fun ens v ->
             let ens, v = pat_name_mapper ens v in
-            (ens, v :: last))
+            (ens, v))
           t
       in
-      (ens, TuplePat (List.rev t))
+      (ens, TuplePat t)
   | ConstructorPat (name, value) ->
       let ens, name = resolve ens name in
       let ens, value = pat_name_mapper ens value in
@@ -46,15 +46,15 @@ let rec expr_name_mapper ens = function
   | Match { scrutinee; arms } ->
       let ens, scrutinee = expr_name_mapper ens scrutinee in
       let ens, arms =
-        List.fold ~init:(ens, [])
-          ~f:(fun (ns, last) (pat, expr) ->
+        List.fold_map ~init:ens
+          ~f:(fun ns (pat, expr) ->
             let+ ns = ns in
             let ns, pat = pat_name_mapper ns pat in
             let ns, expr = expr_name_mapper ns expr in
-            (ns, (pat, expr) :: last))
+            (ns, (pat, expr)))
           arms
       in
-      (ens, Match { scrutinee; arms = List.rev arms })
+      (ens, Match { scrutinee; arms })
   | Lambda { binding; content } ->
       let+ ens = ens in
       let ens, binding = bind ens binding in
@@ -70,13 +70,13 @@ let rec expr_name_mapper ens = function
       (ens, Call { callee; arg })
   | Tuple a ->
       let ens, a =
-        List.fold ~init:(ens, [])
-          ~f:(fun (ens, last) v ->
+        List.fold_map ~init:ens
+          ~f:(fun ens v ->
             let ens, v = expr_name_mapper ens v in
-            (ens, v :: last))
+            (ens, v))
           a
       in
-      (ens, Tuple (List.rev a))
+      (ens, Tuple a)
   | Id name ->
       let ens, name = resolve ens name in
       (ens, Id name)
@@ -98,13 +98,13 @@ let rec ty_name_mapper tns = function
       (tns, Arrow { i = input; o = output })
   | TupleTy tuple ->
       let tns, a =
-        List.fold ~init:(tns, [])
-          ~f:(fun (tns, last) v ->
+        List.fold_map ~init:tns
+          ~f:(fun tns v ->
             let tns, v = ty_name_mapper tns v in
-            (tns, v :: last))
+            (tns, v))
           tuple
       in
-      (tns, TupleTy (List.rev a))
+      (tns, TupleTy a)
 
 let rec top_level_name_mapper ~ens ~tns = function
   | curr :: next ->
@@ -123,18 +123,18 @@ let rec top_level_name_mapper ~ens ~tns = function
                   (ns, var :: vars))
                 vars
             in
-            let ens, ntns, constructors =
-              List.fold ~init:(ens, ntns, [])
-                ~f:(fun (ens, tns, cons) { constructor; ty } ->
+            let (ens, ntns), constructors =
+              List.fold_map ~init:(ens, ntns)
+                ~f:(fun (ens, tns) { constructor; ty } ->
                   let ens, constructor = assign ens constructor in
                   let tns, ty = ty_name_mapper tns ty in
-                  (ens, tns, { constructor; ty } :: cons))
+                  ((ens, tns), { constructor; ty }))
                 constructors
             in
             ( ens,
               scope tns ntns,
               (* TODO: Vars might be backwards *)
-              TyDef { name; vars; constructors = List.rev constructors } )
+              TyDef { name; vars; constructors } )
         | DeclTy _ -> (ens, tns, failwith "todo")
       in
       let ens, tns, next = top_level_name_mapper ~ens ~tns next in
