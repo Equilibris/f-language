@@ -36,7 +36,7 @@ let gather_top_level flat_ir id =
             in
             munch flat_ir tl
         (* TODO: reason about if this is correct *)
-        | Some ty, None | None, Some ty ->
+        | None, Some ty ->
             let%bind ty =
               replace_var_deep (Set.empty (module Int)) ty_map.var_map ty
             in

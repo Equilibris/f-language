@@ -7,9 +7,12 @@ open Core.Poly
 let unify a b =
   let%bind ty_map, t = unify Int.equal (Map.empty (module Int)) a b in
   let%map t = replace_var_deep (Set.empty (module Int)) ty_map t in
-  (* let () = show_var_map ty_map |> printf "hi = {\n%s\n}\n" in *)
-  (* let () = print_ty "t" t in *)
   t
+
+let () =
+  assert (
+    unify (TupleTy [ Id 0; Id 1; Id 2 ]) (TupleTy [ Id 0; Id 1; Id 2 ])
+    = Some (TupleTy [ Id 0; Id 1; Id 2 ]))
 
 let () =
   assert (

@@ -133,6 +133,7 @@ let rec top_level_name_mapper ~ens ~tns = function
             in
             ( ens,
               scope tns ntns,
+              (* TODO: Vars might be backwards *)
               TyDef { name; vars; constructors = List.rev constructors } )
         | DeclTy _ -> (ens, tns, failwith "todo")
       in

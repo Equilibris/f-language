@@ -30,8 +30,8 @@ let stmt_to_src show_a = function
         (List.map
            ~f:(fun { constructor; ty } ->
              Printf.sprintf " | %s %s" (show_a constructor)
-               (ty_to_src show_a ty))
+               (ty_to_src show_a show_a ty))
            constructors
         |> String.concat)
   | DeclTy { name; ty } ->
-      Printf.sprintf "%s :: %s;" (show_a name) (ty_to_src show_a ty)
+      Printf.sprintf "%s :: %s;" (show_a name) (ty_to_src show_a show_a ty)

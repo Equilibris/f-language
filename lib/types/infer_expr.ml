@@ -5,24 +5,30 @@ open Core.Option.Let_syntax
 open Unify
 open Canonicalize
 
+(*
+ TODO: if we reverse the arguments to the function we can
+ do most of the work using currying and then a custom
+ let binding that lets us recive a given input from a
+ curried function to achive quasimutability
+ *)
+
 let show_var_map ?(key_map = Int.to_string) v =
   Map.to_alist v
   |> List.map ~f:(fun (k, v) ->
          Printf.sprintf "\t%s = %s" (key_map k)
-           (Ast.show_ty Format.pp_print_int v))
+           (ty_to_src Int.to_string Int.to_string v))
   |> String.concat ~sep:",\n"
 
 let print_ty_map ?(key_map = Int.to_string) ty_map =
   let () =
-    show_var_map (Type_map.var_map ty_map) |> printf "var_map = {\n%s\n}\n"
+    show_var_map (Type_map.var_map ty_map) ~key_map:(Printf.sprintf "'%i")
+    |> printf "var_map = {\n%s\n}\n"
   in
   show_var_map ~key_map (Type_map.id_ty_map ty_map)
   |> printf "id_ty_map = {\n%s\n}\n"
 
-let print_ty name x = show_ty Format.pp_print_int x |> printf "%s = %s\n" name
-
-(* let () = show_var_map ty_map.var_map |> Printf.printf "x = {\n%s\n}\n" in *)
-(* let () = show_ty Format.pp_print_int cty |> Printf.printf "x = %s\n" in *)
+let print_ty ?(mapper = Int.to_string) name x =
+  ty_to_src mapper Int.to_string x |> printf "%s = %s\n" name
 
 let ty_map_unify ty_map a b =
   let%map var_map, o = unify Int.equal (Type_map.var_map ty_map) a b in
@@ -87,42 +93,42 @@ let rec gather_type flat_ir ty_map id =
               ty_map,
               ty ))
 
-(* and infer_pat flat_ir ty_map nonfree = function *)
-(*   | BindingPat v -> *)
-(*       let ty_map, ty_var = Type_map.mint ty_map v in *)
-(*       let nonfree = Set.add nonfree v in *)
-
-(*       Some (flat_ir, ty_map, nonfree, ty_var) *)
-(*   | _ -> failwith "todo" *)
 and infer_pat flat_ir ty_map nonfree = function
   | BindingPat v ->
       let ty_map, ty_var = Type_map.mint ty_map v in
       let nonfree = Set.add nonfree v in
 
       Some (flat_ir, ty_map, nonfree, ty_var)
-  | TuplePat pat ->
-      let%map flat_ir, ty_map, nonfree, ls =
+  | ConstructorPat (a, b) ->
+      let%bind flat_ir, ty_map, ty = gather_type flat_ir ty_map a in
+      let ty_map, ty = canonicalize ty_map ty in
+      let%bind { i; o } = match ty with Arrow v -> Some v | _ -> None in
+      let%bind flat_ir, ty_map, nonfree, deep =
+        infer_pat flat_ir ty_map nonfree b
+      in
+      let%bind ty_map, _ = ty_map_unify ty_map deep i in
+      let%map ty_map =
+        Set.to_list nonfree
+        |> List.fold ~init:(Some ty_map) ~f:(fun ty_map other ->
+               let%bind ty_map = ty_map in
+               Type_map.replace_in_place ty_map other)
+      in
+      (flat_ir, ty_map, nonfree, o)
+  | TuplePat x ->
+      let%map flat_ir, ty_map, nonfree, o =
         List.fold
           ~init:(Some (flat_ir, ty_map, nonfree, []))
-          ~f:(fun acc e ->
-            let%bind flat_ir, ty_map, nonfree, ls = acc in
-            let%map flat_ir, ty_map, nonfree, ty =
-              infer_pat flat_ir ty_map nonfree e
-            in
-            (flat_ir, ty_map, nonfree, ty :: ls))
-          pat
-      in
-      (flat_ir, ty_map, nonfree, TupleTy (List.rev ls))
-  | ConstructorPat (cname, x) ->
-      let%bind flat_ir, ty_map, nonfree, deep_ty =
-        infer_pat flat_ir ty_map nonfree x
-      in
-      let%bind flat_ir, ty_map, cty = gather_type flat_ir ty_map cname in
-      let ty_map, cty = canonicalize ty_map cty in
-      let%bind { i; o } = match cty with Arrow v -> Some v | _ -> None in
-      let%map ty_map, _ = ty_map_unify ty_map i deep_ty in
+          ~f:(fun curr next ->
+            let%bind flat_ir, ty_map, nonfree, last = curr in
 
-      (flat_ir, ty_map, nonfree, o)
+            let%map flat_ir, ty_map, nonfree, next =
+              infer_pat flat_ir ty_map nonfree next
+            in
+
+            (flat_ir, ty_map, nonfree, next :: last))
+          x
+      in
+      (flat_ir, ty_map, nonfree, TupleTy (List.rev o))
 
 (** Infers the type for a given expression it takes
     in 3 quasi-mutable params

@@ -21,7 +21,7 @@ let canonicalize ty_map ty =
               (ty_map, nx :: last))
             typ
         in
-        (ty_map, TupleTy x)
+        (ty_map, TupleTy (List.rev x))
     | Var v -> (
         match Hashtbl.find imap v with
         | Some v -> (ty_map, v)

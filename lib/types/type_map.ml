@@ -35,6 +35,11 @@ let bind_var v =
   let cursor = cursor v in
   ({ v with cursor = cursor + 1 }, Var cursor)
 
+let replace_in_place v key =
+  let%bind data = Map.find v.id_ty_map key in
+  let%map data = replace_var_deep (Set.empty (module Int)) v.var_map data in
+  { v with id_ty_map = Map.set v.id_ty_map ~key ~data }
+
 let mint v id =
   let v, ty_var = bind_var v in
   (* Since unification of a type variable and any other variable always

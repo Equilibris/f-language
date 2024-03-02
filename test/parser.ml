@@ -125,9 +125,22 @@ module Ty = struct
           DeclTy { name = "id"; ty = Arrow { i = Var "a"; o = Var "a" } };
           Decl { name = "id"; expr = Id "id" };
         ])
-  (* open Core *)
-  (* |> List.map ~f:show_stmt *)
-  (* |> List.intersperse ~sep:"\n\n" *)
-  (* |> List.fold_left ~f:( ^ ) ~init:"" *)
-  (* |> print_endline *)
+
+  let () =
+    assert (
+      {| type x = X (x, ((),)); |}
+      = [
+          TyDef
+            {
+              name = "x";
+              vars = [];
+              constructors =
+                [
+                  {
+                    constructor = "X";
+                    ty = TupleTy [ Id "x"; TupleTy [ TupleTy [] ] ];
+                  };
+                ];
+            };
+        ])
 end

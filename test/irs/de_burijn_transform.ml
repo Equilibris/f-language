@@ -20,14 +20,6 @@ let print_src_kvs code =
   i2s tns
   |> Map.iteri ~f:(fun ~key ~data -> Printf.printf "%i = %s\n%!" key data)
 
-(* let () =  let _,_,  *)
-(*     top_level_name_mapper ~tns:string_namespace ~ens:string_namespace  *)
-
-(* let%test_unit _ = *)
-(*   Parser_tests.test_parse Parser.top_level {|x = \x y x;y = \y x y;|} *)
-(*   |> List.map ~f:(show_stmt Format.pp_print_string) *)
-(*   |> List.iter ~f:print_endline *)
-
 let rec_test = {|x = \x y x;y = \y x y;|}
 
 let () =
@@ -104,20 +96,24 @@ let () =
           };
       ])
 
-(* let _ = *)
-(*   let _, _, res = parse_and_convert {| f = \f \x f x; |} in *)
-(*   show_stmts Format.pp_print_int res |> print_endline *)
-
-(* let _ = *)
-(*   let _, _, res = *)
-(*     parse_and_convert *)
-(* {| *)
-   (*      type list 'a = Nil () | Cons ('a, list 'a); *)
-
-   (*      map = \f \x match x with | Nil _ -> Nil () | Cons (v, x) -> Cons(f v, map f x); *)
-   (*   |} *)
-(*   in *)
-(*   show_stmts Format.pp_print_int res |> print_endline *)
+let () =
+  let _, _, res = parse_and_convert {| type x = X (x, ((),)); |} in
+  assert (
+    res
+    = [
+        TyDef
+          {
+            name = 0;
+            vars = [];
+            constructors =
+              [
+                {
+                  constructor = 0;
+                  ty = TupleTy [ Id 0; TupleTy [ TupleTy [] ] ];
+                };
+              ];
+          };
+      ])
 
 (* let%test_unit _ = *)
 (*   print_src_kvs *)

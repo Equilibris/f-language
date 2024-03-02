@@ -68,10 +68,19 @@ let rec unify eq_t var_map a b =
               (var_map, v :: last))
             tup
         in
+        (* TODO: should be reversed? *)
         (var_map, TupleTy (List.map ~f:(replace_var var_map) tup))
   (* Also handles case where both are variables *)
-  | Var v, x | x, Var v ->
-      let deep = Map.set var_map ~key:v ~data:x in
-      Some (deep, x)
+  | Var v, x | x, Var v -> (
+      (* The bug here is set can overwrite, we need to handle this case
+         explicitly to ensure that the type is maintained. *)
+      match Map.find var_map v with
+      | Some curr_ty ->
+          let%map deep, u_ty = unify eq_t var_map curr_ty x in
+          let deep = Map.set deep ~key:v ~data:u_ty in
+          (deep, x)
+      | None ->
+          let deep = Map.set var_map ~key:v ~data:x in
+          Some (deep, x))
   | a, b -> if equal_ty eq_t a b then Some (var_map, a) else None
 (* Error can be deduced*)

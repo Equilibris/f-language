@@ -1,4 +1,8 @@
 open Core
+module Expr = Expr
+module Type = Type
+module Stmt = Stmt
+module Pat = Pat
 include Expr
 include Type
 include Stmt

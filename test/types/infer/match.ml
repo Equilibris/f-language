@@ -9,28 +9,28 @@ let ty_map = Type_map.empty (module Int)
 
 let _ =
   let flat =
-    convert {|
-       type unit = Unit ();
+    convert
+      {|
+          type unit = Unit ();
 
-       unit = \x Unit ();
-     |}
+          unit = \x Unit ();
+        |}
   in
   let%map _, _, id_ty = gather_top_level flat 1 in
   let _, id_ty = canonicalize (Type_map.empty (module Int)) id_ty in
-  (* show_ty Format.pp_print_int id_ty |> print_endline *)
   assert (equal_ty Int.equal id_ty (Arrow { i = Var 0; o = Id 0 }))
 
 let _ =
   let flat =
-    convert {|
-       type gen 'a = Gen 'a;
+    convert
+      {|
+          type gen 'a = Gen 'a;
 
-       gen = \x Gen x;
-     |}
+          gen = \x Gen x;
+        |}
   in
   let%map _, _, id_ty = gather_top_level flat 1 in
   let _, id_ty = canonicalize (Type_map.empty (module Int)) id_ty in
-  (* show_ty Format.pp_print_int id_ty |> print_endline *)
   assert (
     equal_ty Int.equal id_ty
       (Arrow { i = Var 0; o = Applicative { ty = Id 0; arg = Var 0 } }))
@@ -39,9 +39,9 @@ let _ =
   let flat =
     convert
       {|
-     type gen 'a = Gen 'a;
-     de_gen = \x match x with | Gen v -> v;
-   |}
+        type gen 'a = Gen 'a;
+        de_gen = \x match x with | Gen v -> v;
+      |}
   in
   let%map _, _, de_gen_ty = gather_top_level flat 1 in
 
@@ -54,11 +54,11 @@ let _ =
   let flat =
     convert
       {|
-         type nat = Succ nat | Zero ();
-         type list 'a = Nil () | Cons ('a, list 'a);
+            type nat = Succ nat | Zero ();
+            type list 'a = Nil () | Cons ('a, list 'a);
 
-         len = \x match x with | Nil _ -> Zero () | Cons (_, x) -> Succ (len x);
-       |}
+            len = \x match x with | Nil _ -> Zero () | Cons (_, x) -> Succ (len x);
+          |}
   in
   let%map _, _, len_ty = gather_top_level flat 4 in
   let _, len_ty = canonicalize (Type_map.empty (module Int)) len_ty in
@@ -68,38 +68,48 @@ let _ =
       (Arrow { i = Applicative { ty = Id 1; arg = Var 0 }; o = Id 0 }))
 
 let _ =
-  let ens, flat =
+  let _, _, flat =
+    convert_with_map
+      {|
+           restrict_id = \x
+               match x with
+               | (a, b) -> x;
+         |}
+  in
+  let%map _, _ty_map, restrict_id = gather_top_level flat 0 in
+  let _, restrict_id = canonicalize (Type_map.empty (module Int)) restrict_id in
+  assert (
+    equal_ty Int.equal restrict_id
+      (Arrow { i = TupleTy [ Var 0; Var 1 ]; o = TupleTy [ Var 0; Var 1 ] }))
+
+let _ =
+  let _, _, flat =
     convert_with_map
       {|
         type list 'a = Nil () | Cons ('a, list 'a);
 
+        loop = \x loop x;
+
         map = \f \x
             match x with
-            | Nil _ -> Nil ()
-            | Cons (v, x) -> Cons(f v, map f x);
+            | Nil () -> Nil ()
+            | Cons (v, x) -> Cons (f v, map f x);
       |}
   in
-  (* Skip test *)
-  let%bind _ = None in
-  let%map _, ty_map, _ = gather_top_level flat 2 in
-  (* let _, map_ty = canonicalize (Type_map.empty (module Int)) map_ty in *)
-  print_ty_map ~key_map:(Map.find_exn (Namespace.i2s ens)) ty_map
-(* equal_ty Int.equal map_ty *)
-(*   (Arrow *)
-(*      { *)
-(*        i = *)
-(*          Arrow *)
-(*            { *)
-(*              i = Applicative { ty = Id 0; arg = Var 0 }; *)
-(*              o = Applicative { ty = Id 0; arg = Var 1 }; *)
-(*            }; *)
-(*        o = *)
-(*          Arrow *)
-(*            { *)
-(*              i = Applicative { ty = Id 0; arg = Var 0 }; *)
-(*              o = Applicative { ty = Id 0; arg = Var 1 }; *)
-(*            }; *)
-(*      }) *)
+  let%map _, _, map_ty = gather_top_level flat 4 in
+  let _, map_ty = canonicalize (Type_map.empty (module Int)) map_ty in
+  assert (
+    equal_ty Int.equal map_ty
+      (Arrow
+         {
+           i = Arrow { i = Var 0; o = Var 1 };
+           o =
+             Arrow
+               {
+                 i = Applicative { ty = Id 0; arg = Var 0 };
+                 o = Applicative { ty = Id 0; arg = Var 1 };
+               };
+         }))
 
 let _ =
   let flat = convert {|

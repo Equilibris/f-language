@@ -7,7 +7,7 @@ let convert = Fn.compose of_ens_tns_stream parse_and_convert
 
 let convert_with_map x =
   let ens, tns, v = parse_and_convert x in
-  (ens, of_ens_tns_stream (ens, tns, v))
+  (ens, tns, of_ens_tns_stream (ens, tns, v))
 
 let ty_value = convert "type bool = True () | False (); type x = X ((), ((),));"
 
