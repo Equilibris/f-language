@@ -12,6 +12,15 @@ open Canonicalize
  curried function to achive quasimutability
  *)
 
+module State = struct
+  type ('a, 'b, 'c) t = {
+    flat_ir : ('a, 'b, 'c) Flat.flat_ir;
+    ty_map : ('a, 'b) Type_map.t;
+  }
+end
+
+(* open State *)
+
 let show_var_map ?(key_map = Int.to_string) v =
   Map.to_alist v
   |> List.map ~f:(fun (k, v) ->

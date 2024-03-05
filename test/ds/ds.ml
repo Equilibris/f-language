@@ -2,18 +2,13 @@ module State_t = struct
   open Flang.Ds
 
   module Op_counting = struct
-    module Ops_counts =
-      State_t
-        (struct
-          type t = int * int
-        end)
-        (Base.Monad.Ident)
+    module Ident = State_t (Base.Monad.Ident)
 
     let add n m (ac, mc) = (n + m, (ac + 1, mc))
     let mul n m (ac, mc) = (n * m, (ac, mc + 1))
 
     let c =
-      let open Ops_counts.Let_syntax in
+      let open Ident.Let_syntax in
       let%bind v = add 1 2 in
       let%map m = mul v 2 in
       m
@@ -22,26 +17,19 @@ module State_t = struct
   end
 
   module Op_counting_opt = struct
-    module Ops_counts =
-      State_t
-        (struct
-          type t = int * int
-        end)
-        (Core.Option)
-
     let add n m (ac, mc) = Some (n + m, (ac + 1, mc))
     let sub n m (ac, mc) = Some (n - m, (ac + 1, mc))
     let mul n m (ac, mc) = Some (n * m, (ac, mc + 1))
     let div n m (ac, mc) = if m = 0 then None else Some (n / m, (ac, mc + 1))
 
     let c =
-      let open Ops_counts.Let_syntax in
+      let open State_opt.Let_syntax in
       let%bind v = add 1 2 in
       let%map m = mul v 2 in
       m
 
     let zd =
-      let open Ops_counts.Let_syntax in
+      let open State_opt.Let_syntax in
       let%bind v = add 1 2 in
       let%map m = div v 0 in
       m
@@ -54,9 +42,9 @@ module State_t = struct
     open Op_counting_opt
 
     let c =
-      let open Ops_counts.Let_syntax in
+      let open State_opt.Let_syntax in
       let%bind v = add 1 2 in
-      let%bind curr = Ops_counts.inspect in
+      let%bind curr = State_opt.inspect in
       let%map m = mul v 2 in
       (m, curr)
   end
