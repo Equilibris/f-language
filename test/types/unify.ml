@@ -5,8 +5,8 @@ open Core.Option.Let_syntax
 open Core.Poly
 
 let unify a b =
-  let%bind ty_map, t = unify Int.equal (Map.empty (module Int)) a b in
-  let%map t = replace_var_deep (Set.empty (module Int)) ty_map t in
+  let%bind ty_map, t = unify Int.equal a b (Map.empty (module Int)) in
+  let%map t = replace_var_deep t ty_map in
   t
 
 let () =

@@ -1,9 +1,13 @@
 open Core
 open Irs
 open Irs.Ast
-open Core.Option.Let_syntax
 open Unify
 open Canonicalize
+open Ds
+open State_opt
+open State_opt.Let_syntax
+open Type_map.Setters (Option)
+open Flat.Setters (Option)
 
 (*
  TODO: if we reverse the arguments to the function we can
@@ -13,13 +17,31 @@ open Canonicalize
  *)
 
 module State = struct
-  type ('a, 'b, 'c) t = {
+  type ('a, 'b, 'c, 'd, 'e) t = {
     flat_ir : ('a, 'b, 'c) Flat.flat_ir;
-    ty_map : ('a, 'b) Type_map.t;
+    ty_map : ('d, 'e) Type_map.t;
   }
+
+  module Setters (M : Base.Monad.S) = struct
+    module M = State_t (M)
+    open M
+
+    let set_ty_map x =
+      translate
+        (fun { flat_ir = _; ty_map } -> ty_map)
+        (fun ty_map s -> { s with ty_map })
+        x
+
+    let set_flat_ir x =
+      translate
+        (fun { flat_ir; ty_map = _ } -> flat_ir)
+        (fun flat_ir s -> { s with flat_ir })
+        x
+  end
 end
 
-(* open State *)
+open State
+open State.Setters (Option)
 
 let show_var_map ?(key_map = Int.to_string) v =
   Map.to_alist v
@@ -39,25 +61,27 @@ let print_ty_map ?(key_map = Int.to_string) ty_map =
 let print_ty ?(mapper = Int.to_string) name x =
   ty_to_src mapper Int.to_string x |> printf "%s = %s\n" name
 
-let ty_map_unify ty_map a b =
-  let%map var_map, o = unify Int.equal (Type_map.var_map ty_map) a b in
-  ({ ty_map with var_map }, o)
+let ty_map_unify a b =
+  let%map o = unify Int.equal a b |> set_var_map in
+  o
 
-let rec app flat_ir ty_map fn_ty arg_ty =
+let rec app fn_ty arg_ty =
   match fn_ty with
   | Arrow { i; o } ->
-      let%map var_map, _ = unify Int.equal (Type_map.var_map ty_map) i arg_ty in
+      let%bind _ = ty_map_unify i arg_ty |> set_ty_map in
       (* replace_var only maps variable equality as types are strictly distinct *)
-      let o = replace_var var_map o in
-      (flat_ir, { ty_map with var_map }, o)
+      let%map o =
+        replace_var o |> i_ret |> effectless |> set_var_map |> set_ty_map
+      in
+      o
   | Var _ as v ->
-      let ty_map, i = Type_map.bind_var ty_map in
-      let ty_map, o = Type_map.bind_var ty_map in
+      let%bind i = Type_map.bind_var |> i_ret |> set_ty_map in
+      let%bind o = Type_map.bind_var |> i_ret |> set_ty_map in
       let i_type = Arrow { i; o } in
-      let%bind ty_map, _ = ty_map_unify ty_map v i_type in
+      let%bind _ = ty_map_unify v i_type |> set_ty_map in
 
-      app flat_ir ty_map i_type arg_ty
-  | _ -> None
+      app i_type arg_ty
+  | _ -> t_return None
 
 (** gather_type does exactly what one thinks it does;
     it asks the current context for the type of a
@@ -70,83 +94,80 @@ let rec app flat_ir ty_map fn_ty arg_ty =
     final one is now an identifier rather than an
     expr.
  *)
-let rec gather_type flat_ir ty_map id =
-  if Type_map.mem ty_map id then
+let rec gather_type id =
+  let%bind ty_map = inspect |> set_ty_map in
+  let%bind condition = Type_map.mem id |> i_ret |> effectless |> set_ty_map in
+  if condition then
     match Map.find ty_map.id_ty_map id with
     | None ->
-        let ty_map, ty_var = Type_map.mint ty_map id in
-        Some (flat_ir, ty_map, ty_var)
-    | Some v -> Some (flat_ir, ty_map, v)
+        let%map ty_var = Type_map.mint id |> i_ret |> set_ty_map in
+        ty_var
+    | Some v -> return v
   else
-    match Map.find (Type_map.id_ty_map ty_map) id with
-    | Some v -> Some (flat_ir, ty_map, v)
+    let%bind id_ty_map = inspect |> set_id_ty_map |> set_ty_map in
+    match Map.find id_ty_map id with
+    | Some v -> return v
     | None -> (
-        let fn_ty_map = Flat.fn_ty_map flat_ir in
+        let%bind fn_ty_map = inspect |> set_fn_ty_map |> set_flat_ir in
         match Map.find fn_ty_map id with
-        | Some v -> Some (flat_ir, ty_map, v)
+        | Some v -> return v
         | None ->
-            let fn_def_map = Flat.fn_def_map flat_ir in
+            let%bind fn_def_map = inspect |> set_fn_def_map |> set_flat_ir in
             (* Reference to undefined function, this should in theory not be
                possible if data is generated from the given function.
                Thereby I am ok using exn here *)
             let { name = _; expr } = Map.find_exn fn_def_map id in
-            let ty_map = Type_map.enqueue ty_map id in
-            let%map flat_ir, ty_map, ty =
-              infer_expr flat_ir ty_map (Set.empty (module Int)) expr
+            let%bind () = Type_map.enqueue id |> update |> set_ty_map in
+            let%bind ty = infer_expr (Set.empty (module Int)) expr in
+            let%map () =
+              Map.set ~key:id ~data:ty |> update |> set_fn_ty_map |> set_flat_ir
             in
-            ( Flat.
-                {
-                  flat_ir with
-                  fn_ty_map = Map.set ~key:id ~data:ty (fn_ty_map flat_ir);
-                },
-              ty_map,
-              ty ))
 
-and infer_pat flat_ir ty_map nonfree = function
+            ty)
+
+and infer_pat nonfree v =
+  match v with
   | BindingPat v ->
-      let ty_map, ty_var = Type_map.mint ty_map v in
+      let%map ty_var = Type_map.mint v |> i_ret |> set_ty_map in
       let nonfree = Set.add nonfree v in
 
-      Some (flat_ir, ty_map, nonfree, ty_var)
+      (nonfree, ty_var)
   | ConstructorPat (a, b) ->
-      let%bind flat_ir, ty_map, ty = gather_type flat_ir ty_map a in
-      let ty_map, ty = canonicalize ty_map ty in
-      let%bind { i; o } = match ty with Arrow v -> Some v | _ -> None in
-      let%bind flat_ir, ty_map, nonfree, deep =
-        infer_pat flat_ir ty_map nonfree b
+      let%bind ty = gather_type a in
+      let%bind ty = canonicalize ty |> i_ret |> set_ty_map in
+      let%bind { i; o } =
+        t_return (match ty with Arrow v -> Some v | _ -> None)
       in
-      let%bind ty_map, _ = ty_map_unify ty_map deep i in
-      let%map ty_map =
-        Set.to_list nonfree
-        |> List.fold ~init:(Some ty_map) ~f:(fun ty_map other ->
-               let%bind ty_map = ty_map in
-               Type_map.replace_in_place ty_map other)
+      let%bind nonfree, deep = infer_pat nonfree b in
+      let%bind _ = ty_map_unify deep i |> set_ty_map in
+      let%map () =
+        effect (fun ty_map ->
+            Set.to_list nonfree
+            |> List.fold ~init:(Some ty_map) ~f:(fun ty_map other ->
+                   let open Option.Let_syntax in
+                   let%bind ty_map = ty_map in
+                   Type_map.replace_in_place other ty_map))
+        |> set_ty_map
       in
-      (flat_ir, ty_map, nonfree, o)
+
+      (nonfree, o)
   | TuplePat x ->
-      let%map flat_ir, ty_map, nonfree, o =
+      let%map nonfree, rev_tuple =
         List.fold
-          ~init:(Some (flat_ir, ty_map, nonfree, []))
-          ~f:(fun curr next ->
-            let%bind flat_ir, ty_map, nonfree, last = curr in
+          ~init:(fun state -> Some (state, (nonfree, [])))
+          ~f:(fun current next ->
+            (* TODO: This can be a fold_map *)
+            let%bind nonfree, last = current in
 
-            let%map flat_ir, ty_map, nonfree, next =
-              infer_pat flat_ir ty_map nonfree next
-            in
-
-            (flat_ir, ty_map, nonfree, next :: last))
+            let%map nonfree, next = infer_pat nonfree next in
+            (nonfree, next :: last))
           x
       in
-      (flat_ir, ty_map, nonfree, TupleTy (List.rev o))
+
+      (nonfree, TupleTy (List.rev rev_tuple))
 
 (** Infers the type for a given expression it takes
-    in 3 quasi-mutable params
-    - flat_ir   The flat intermediate representation
-                used for function lookup
-    - ty_map    The type map, used for lookup of
-                variables that do not escape the
-                scope of the current function
-                and also type variable equality
+    in 1 quasi-mutable params
     - nonfree   The set of variables that are bound 
                 within the current inference context.
                 This includes stuff like all variables,
@@ -159,89 +180,83 @@ and infer_pat flat_ir ty_map nonfree = function
     After all of these one finally passes the expression
     for inference. This is also the point of recursion.
   *)
-and infer_expr flat_ir ty_map nonfree =
-  let open Type_map in
-  function
+and infer_expr nonfree v =
+  let open! Type_map in
+  match v with
   | Call { callee; arg } ->
-      let%bind flat_ir, ty_map, callee =
-        infer_expr flat_ir ty_map nonfree callee
-      in
-      let%bind flat_ir, ty_map, arg = infer_expr flat_ir ty_map nonfree arg in
-      app flat_ir ty_map callee arg
+      let%bind callee = infer_expr nonfree callee in
+      let%bind arg = infer_expr nonfree arg in
+      app callee arg
   | Bind { name; value; within } ->
       let nonfree = Set.add nonfree name in
-      let%bind flat_ir, ty_map, value =
-        infer_expr flat_ir ty_map nonfree value
-      in
+      let%bind value = infer_expr nonfree value in
       (* TODO: is this redundant *)
-      let ty_map, _ = mint ty_map name in
-      let%bind flat_ir, ty_map, within =
-        infer_expr flat_ir ty_map nonfree within
+      let%bind _ = mint name |> i_ret |> set_ty_map in
+      let%bind within = infer_expr nonfree within in
+      let%bind () = set_or_update name value |> effect |> set_ty_map in
+      let%map within =
+        replace_var within |> i_ret |> effectless |> set_var_map |> set_ty_map
       in
-      let%map ty_map = set_or_update ty_map name value in
-      let within = replace_var ty_map.var_map within in
 
-      (flat_ir, ty_map, within)
+      within
   | Match { scrutinee; arms } ->
-      let%bind flat_ir, ty_map, scrutinee_ty =
-        infer_expr flat_ir ty_map nonfree scrutinee
-      in
-      let ty_map, arm_ty = Type_map.bind_var ty_map in
+      let%bind scrutinee_ty = infer_expr nonfree scrutinee in
+      let%bind arm_ty = Type_map.bind_var |> i_ret |> set_ty_map in
 
-      let%map flat_ir, ty_map, _, arm_ty =
-        (* let%bind _ = *)
+      let%map _, arm_ty =
+       fun state ->
         List.fold
-          ~init:(Some (flat_ir, ty_map, scrutinee_ty, arm_ty))
+          ~init:(Some (state, (scrutinee_ty, arm_ty)))
           ~f:(fun last (pat, ex) ->
-            let%bind flat_ir, ty_map, scrutinee_ty, arm_ty = last in
-            let%bind flat_ir, ty_map, nonfree, u_ty =
-              infer_pat flat_ir ty_map nonfree pat
+            let open Option.Let_syntax in
+            let%bind { flat_ir; ty_map }, (scrutinee_ty, arm_ty) = last in
+            let%bind { flat_ir; ty_map }, (nonfree, u_ty) =
+              infer_pat nonfree pat { flat_ir; ty_map }
             in
 
             let%bind ty_map, scrutinee_ty =
-              ty_map_unify ty_map u_ty scrutinee_ty
+              ty_map_unify u_ty scrutinee_ty ty_map
             in
-            let%bind flat_ir, ty_map, u_ty =
-              infer_expr flat_ir ty_map nonfree ex
+            let%bind { flat_ir; ty_map }, u_ty =
+              infer_expr nonfree ex { flat_ir; ty_map }
             in
-            let%map ty_map, arm_ty = ty_map_unify ty_map u_ty arm_ty in
+            let%map ty_map, arm_ty = ty_map_unify u_ty arm_ty ty_map in
 
-            (flat_ir, ty_map, scrutinee_ty, arm_ty))
+            ({ flat_ir; ty_map }, (scrutinee_ty, arm_ty)))
           arms
       in
-      (flat_ir, ty_map, arm_ty)
+      arm_ty
   | Lambda { binding; content } ->
       let nonfree = Set.add nonfree binding in
-      let ty_map, _ = mint ty_map binding in
-      let%bind flat_ir, ty_map, o = infer_expr flat_ir ty_map nonfree content in
-      let%map flat_ir, ty_map, i = gather_type flat_ir ty_map binding in
-      (flat_ir, ty_map, Arrow { i; o })
+      let%bind _ = mint binding |> i_ret |> set_ty_map in
+      let%bind o = infer_expr nonfree content in
+      let%map i = gather_type binding in
+      Arrow { i; o }
   | Constructor (constructor_e, arg_e) ->
-      let%bind flat_ir, ty_map, constructor_ty =
-        gather_type flat_ir ty_map constructor_e
+      let%bind constructor_ty = gather_type constructor_e in
+      let%bind constructor_ty =
+        canonicalize constructor_ty |> i_ret |> set_ty_map
       in
-      let ty_map, constructor_ty = canonicalize ty_map constructor_ty in
-      let%bind flat_ir, ty_map, arg_e =
-        infer_expr flat_ir ty_map nonfree arg_e
-      in
-      app flat_ir ty_map constructor_ty arg_e
+      let%bind arg_e = infer_expr nonfree arg_e in
+      app constructor_ty arg_e
   | Tuple v ->
-      let%map flat_ir, ty_map, ls =
+      (* TODO: make fold_map monad *)
+      let%map ls =
         List.fold
-          ~init:(Some (flat_ir, ty_map, []))
+          ~init:(fun state -> Some (state, []))
           ~f:(fun acc e ->
-            let%bind flat_ir, ty_map, ls = acc in
-            let%map flat_ir, ty_map, ty = infer_expr flat_ir ty_map nonfree e in
-            (flat_ir, ty_map, ty :: ls))
+            let%bind ls = acc in
+            let%map ty = infer_expr nonfree e in
+            ty :: ls)
           v
       in
-      (flat_ir, ty_map, TupleTy (List.rev ls))
+      TupleTy (List.rev ls)
   | Id v ->
       let nonfree = Set.mem nonfree v in
 
-      let%map flat_ir, ty_map, ty = gather_type flat_ir ty_map v in
+      let%bind ty = gather_type v in
 
-      if nonfree then (flat_ir, ty_map, ty)
+      if nonfree then return ty
       else
-        let ty_map, v = canonicalize ty_map ty in
-        (flat_ir, ty_map, v)
+        let%map v = canonicalize ty |> i_ret |> set_ty_map in
+        v

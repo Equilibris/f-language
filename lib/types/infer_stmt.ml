@@ -1,53 +1,58 @@
 open Core
 open Irs
-open Core.Option.Let_syntax
-open Infer_expr
+open Ds.State_opt
+open Ds.State_opt.Let_syntax
 open Unify
+open Infer_expr
+open Infer_expr.State
+open Infer_expr.State.Setters (Option)
+open Type_map.Setters (Option)
+open Flat.Setters (Option)
 
-let gather_top_level flat_ir id =
-  let ty_map = Type_map.empty (module Int) in
-  let%bind flat_ir, ty_map, _ = gather_type flat_ir ty_map id in
-  let l = Ds.Index_set.ls ty_map.stack in
+let gather_top_level id =
+  let%bind _ = gather_type id in
+  let%bind ty_map = inspect |> set_ty_map in
+  let l = Set.to_list ty_map.vset in
+  let%bind _ =
+    List.fold ~init:id_state
+      ~f:(fun state key ->
+        let%bind () = state in
+        let%bind { flat_ir; ty_map } = inspect in
 
-  let rec munch flat_ir = function
-    | [] ->
-        let%map v = Map.find (Flat.fn_ty_map flat_ir) id in
-        (flat_ir, ty_map, v)
-    | h :: tl -> (
         match
-          ( Map.find (Type_map.id_ty_map ty_map) h,
-            Map.find (Flat.fn_ty_map flat_ir) h )
+          ( Map.find (Type_map.id_ty_map ty_map) key,
+            Map.find (Flat.fn_ty_map flat_ir) key )
         with
-        | Some update, Some curr ->
+        | Some new_ty, Some curr ->
             (* We ignore this continuation as it might use differing
                variables caused by if for example it is once canonicalized
                yet subsequently not. This might need a fix
             *)
-            let%bind var_map, ty = unify Int.equal ty_map.var_map update curr in
+            let%bind ty = ty_map_unify new_ty curr |> set_ty_map in
             let%bind ty =
-              replace_var_deep (Set.empty (module Int)) var_map ty
+              replace_var_deep ty |> effectless |> set_var_map |> set_ty_map
             in
 
-            let flat_ir =
-              {
-                flat_ir with
-                fn_ty_map = Map.set (Flat.fn_ty_map flat_ir) ~key:h ~data:ty;
-              }
+            let%bind () =
+              Map.set ~key ~data:ty |> update |> set_fn_ty_map |> set_flat_ir
             in
-            munch flat_ir tl
+            return ()
         (* TODO: reason about if this is correct *)
         | None, Some ty ->
             let%bind ty =
-              replace_var_deep (Set.empty (module Int)) ty_map.var_map ty
+              replace_var_deep ty |> effectless |> set_var_map |> set_ty_map
             in
-            let flat_ir =
-              {
-                flat_ir with
-                fn_ty_map = Map.set (Flat.fn_ty_map flat_ir) ~key:h ~data:ty;
-              }
+
+            let%bind () =
+              Map.set ~key ~data:ty |> update |> set_fn_ty_map |> set_flat_ir
             in
-            munch flat_ir tl
-        | _ -> munch flat_ir tl)
+            return ()
+        | _ -> return ())
+      l
   in
 
-  munch flat_ir l
+  Fn.flip Map.find id |> effectless |> set_fn_ty_map |> set_flat_ir
+
+let gather_top_level flat_ir id =
+  let ty_map = Type_map.empty (module Int) in
+  gather_top_level id { flat_ir; ty_map }

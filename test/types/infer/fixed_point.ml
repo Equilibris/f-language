@@ -14,6 +14,6 @@ let flat = convert {|
 
 let _ =
   let%bind _ = None in
-  let%map _, _, ty = gather_top_level flat 0 in
+  let%map _, ty = gather_top_level flat 0 in
 
   show_ty Format.pp_print_int ty |> print_endline

@@ -1,6 +1,7 @@
 open! Core
 open Flang.Types
 open Flang.Irs.Ast
+open Flang.Types.State
 open Irs.Flat
 open Core.Option.Let_syntax
 
@@ -8,18 +9,20 @@ let ty_map = Type_map.empty (module Int)
 let eset = Set.empty (module Int)
 
 let _ =
-  let flat = convert "" in
-  let%map _, ty_map, _, true_ty = infer_pat flat ty_map eset (BindingPat 1) in
+  let flat_ir = convert "" in
+  let%map { flat_ir = _; ty_map }, (_, true_ty) =
+    infer_pat eset (BindingPat 1) { flat_ir; ty_map }
+  in
   assert (
     equal_ty Int.equal true_ty (Var 0)
     && equal_ty Int.equal (Map.find_exn ty_map.id_ty_map 1) (Var 0))
 
 let _ =
-  let flat = convert {|
+  let flat_ir = convert {|
           type bool = True ();
         |} in
-  let%bind _, ty_map, _, true_ty =
-    infer_pat flat ty_map eset (ConstructorPat (0, BindingPat 1))
+  let%bind { flat_ir = _; ty_map }, (_, true_ty) =
+    infer_pat eset (ConstructorPat (0, BindingPat 1)) { flat_ir; ty_map }
   in
   let%map alt_ty = Map.find ty_map.id_ty_map 1 in
   assert (
@@ -57,12 +60,13 @@ let _ =
 (*     && equal_ty Int.equal true_ty (TupleTy [ Id 0; TupleTy [] ])) *)
 
 let _ =
-  let flat = convert {|
+  let flat_ir = convert {|
        type x = X (x, ((),));
      |} in
-  let%map _, ty_map, _, t =
-    infer_pat flat ty_map eset
+  let%map { ty_map; flat_ir = _ }, (_, t) =
+    infer_pat eset
       (ConstructorPat (0, TuplePat [ BindingPat 1; BindingPat 10 ]))
+      { flat_ir; ty_map }
   in
   assert (
     equal_ty Int.equal t (Id 0)

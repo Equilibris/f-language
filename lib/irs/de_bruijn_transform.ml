@@ -19,15 +19,15 @@ open State.Let_syntax
  *)
 
 let scope_update x =
-  State.update (fun current old -> Namespace.scope old current) x
+  State.replace (fun old current -> Namespace.scope old current) x
 
 let rec pat_name_mapper v =
   match v with
-  | BindingPat v ->
-      let%map v = Namespace.bind v in
-      BindingPat v
+  | BindingPat var_name ->
+      let%map var_name = Namespace.bind var_name in
+      BindingPat var_name
   | TuplePat t ->
-      let%map t ens = List.fold_map ~init:ens ~f:(Fn.flip pat_name_mapper) t in
+      let%map t init = List.fold_map ~init ~f:(Fn.flip pat_name_mapper) t in
       TuplePat t
   | ConstructorPat (name, value) ->
       let%bind name = Namespace.resolve name in
@@ -104,16 +104,20 @@ module S = struct
     ens : ('a, 'b, 'c) Namespace.t;
     tns : ('a, 'b, 'c) Namespace.t;
   }
+
+  (* sad eta expantion noises *)
+  module Setters (M : Base.Monad.S) = struct
+    module M = State_t (M)
+
+    let set_ens x =
+      M.translate (fun { ens; tns = _ } -> ens) (fun ens s -> { s with ens }) x
+
+    let set_tns x =
+      M.translate (fun { ens = _; tns } -> tns) (fun tns s -> { s with tns }) x
+  end
 end
 
-open S
-
-(* sad eta expantion noises *)
-let set_ens x =
-  State.translate (fun { ens; tns = _ } -> ens) (fun ens s -> { s with ens }) x
-
-let set_tns x =
-  State.translate (fun { ens = _; tns } -> tns) (fun tns s -> { s with tns }) x
+open S.Setters (Base.Monad.Ident)
 
 let handle_decl { name; expr } =
   let%bind name = set_ens (Namespace.assign name) in

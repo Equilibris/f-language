@@ -45,13 +45,8 @@ let assign name { i2s; s2i; i; req } =
         },
         i )
 
-let scope { s2i; i2s = _; i = _; req = _ } ns = { ns with s2i }
+let scope { s2i; i2s = _; i = _; req = _ } new_ns = { new_ns with s2i }
 
-let scopef f ns =
-  let nns, v = f ns in
-  (scope ns nns, v)
-
-(** Unsafely binds the key  *)
 let bind name { i2s; s2i; i; req } =
   ( {
       i2s = Map.set ~key:i ~data:name i2s;
@@ -60,6 +55,3 @@ let bind name { i2s; s2i; i; req } =
       req;
     },
     i )
-
-(* Can de defined on state_T *)
-(* let ( let+ ) a b = scopef *)

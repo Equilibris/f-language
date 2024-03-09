@@ -2,10 +2,10 @@ open Core
 open Flang.Types
 open Flang.Irs.Ast.Type
 
-let ty_map = Type_map.empty (module Int)
+let canonicalize x = canonicalize x (Type_map.empty (module Int))
 
 let ( =* ) a b =
-  let _, v = canonicalize ty_map a in
+  let _, v = canonicalize a in
   assert (equal_ty Int.equal b v)
 
 let () = Id 0 =* Id 0
