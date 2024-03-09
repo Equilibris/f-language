@@ -1,5 +1,7 @@
 open Core
 open Ast
+open Ds
+open State.Let_syntax
 
 (** De Bruijn index Transformations *)
 
@@ -16,127 +18,136 @@ open Ast
  - xreq is a requests system to manage possibly undefined variables
  *)
 
-open Ds.Namespace
+let scope_update x =
+  State.update (fun current old -> Namespace.scope old current) x
 
-let rec pat_name_mapper ens = function
+let rec pat_name_mapper v =
+  match v with
   | BindingPat v ->
-      let ens, v = bind ens v in
-      (ens, BindingPat v)
+      let%map v = Namespace.bind v in
+      BindingPat v
   | TuplePat t ->
-      let ens, t =
-        List.fold_map ~init:ens
-          ~f:(fun ens v ->
-            let ens, v = pat_name_mapper ens v in
-            (ens, v))
-          t
-      in
-      (ens, TuplePat t)
+      let%map t ens = List.fold_map ~init:ens ~f:(Fn.flip pat_name_mapper) t in
+      TuplePat t
   | ConstructorPat (name, value) ->
-      let ens, name = resolve ens name in
-      let ens, value = pat_name_mapper ens value in
-      (ens, ConstructorPat (name, value))
+      let%bind name = Namespace.resolve name in
+      let%map value = pat_name_mapper value in
+      ConstructorPat (name, value)
 
-let rec expr_name_mapper ens = function
+let rec expr_name_mapper = function
   | Bind { name; value; within } ->
-      let ens, value = expr_name_mapper ens value in
-      let+ ens = ens in
-      let ens, name = bind ens name in
-      let ens, within = expr_name_mapper ens within in
-      (ens, Bind { name; value; within })
+      let%bind value = expr_name_mapper value in
+      let%bind old_ens = State.inspect in
+      let%bind name = Namespace.bind name in
+      let%bind within = expr_name_mapper within in
+      let%map () = scope_update old_ens in
+      Bind { name; value; within }
   | Match { scrutinee; arms } ->
-      let ens, scrutinee = expr_name_mapper ens scrutinee in
-      let ens, arms =
+      let%bind scrutinee = expr_name_mapper scrutinee in
+      let%map arms ens =
         List.fold_map ~init:ens
-          ~f:(fun ns (pat, expr) ->
-            let+ ns = ns in
-            let ns, pat = pat_name_mapper ns pat in
-            let ns, expr = expr_name_mapper ns expr in
-            (ns, (pat, expr)))
+          ~f:
+            (Fn.flip (fun (pat, expr) ->
+                 let%bind old_ns = State.inspect in
+                 let%bind pat = pat_name_mapper pat in
+                 let%bind expr = expr_name_mapper expr in
+                 let%map () = scope_update old_ns in
+                 (pat, expr)))
           arms
       in
-      (ens, Match { scrutinee; arms })
+
+      Match { scrutinee; arms }
   | Lambda { binding; content } ->
-      let+ ens = ens in
-      let ens, binding = bind ens binding in
-      let ens, content = expr_name_mapper ens content in
-      (ens, Lambda { binding; content })
+      let%bind old_ens = State.inspect in
+      let%bind binding = Namespace.bind binding in
+      let%bind content = expr_name_mapper content in
+      let%map () = scope_update old_ens in
+      Lambda { binding; content }
   | Constructor (name, value) ->
-      let ens, name = resolve ens name in
-      let ens, value = expr_name_mapper ens value in
-      (ens, Constructor (name, value))
+      let%bind name = Namespace.resolve name in
+      let%map value = expr_name_mapper value in
+      Constructor (name, value)
   | Call { callee; arg } ->
-      let ens, callee = expr_name_mapper ens callee in
-      let ens, arg = expr_name_mapper ens arg in
-      (ens, Call { callee; arg })
+      let%bind callee = expr_name_mapper callee in
+      let%map arg = expr_name_mapper arg in
+      Call { callee; arg }
   | Tuple a ->
-      let ens, a =
-        List.fold_map ~init:ens
-          ~f:(fun ens v ->
-            let ens, v = expr_name_mapper ens v in
-            (ens, v))
-          a
-      in
-      (ens, Tuple a)
+      let%map a ens = List.fold_map ~init:ens ~f:(Fn.flip expr_name_mapper) a in
+      Tuple a
   | Id name ->
-      let ens, name = resolve ens name in
-      (ens, Id name)
+      let%map name = Namespace.resolve name in
+      Expr.(Id name)
 
-let rec ty_name_mapper tns = function
+let rec ty_name_mapper = function
   | Var name ->
-      let tns, name = resolve tns name in
-      (tns, Var name)
+      let%map name = Namespace.resolve name in
+      Var name
   | Id name ->
-      let tns, name = resolve tns name in
-      (tns, Id name)
+      let%map name = Namespace.resolve name in
+      Id name
   | Applicative { ty; arg } ->
-      let tns, ty = ty_name_mapper tns ty in
-      let tns, arg = ty_name_mapper tns arg in
-      (tns, Applicative { ty; arg })
+      let%bind ty = ty_name_mapper ty in
+      let%map arg = ty_name_mapper arg in
+      Applicative { ty; arg }
   | Arrow { i = input; o = output } ->
-      let tns, input = ty_name_mapper tns input in
-      let tns, output = ty_name_mapper tns output in
-      (tns, Arrow { i = input; o = output })
+      let%bind input = ty_name_mapper input in
+      let%map output = ty_name_mapper output in
+      Arrow { i = input; o = output }
   | TupleTy tuple ->
-      let tns, a =
-        List.fold_map ~init:tns
-          ~f:(fun tns v ->
-            let tns, v = ty_name_mapper tns v in
-            (tns, v))
-          tuple
+      let%map a tns =
+        List.fold_map ~init:tns ~f:(Fn.flip ty_name_mapper) tuple
       in
-      (tns, TupleTy a)
+      TupleTy a
 
-let rec top_level_name_mapper ~ens ~tns = function
+module S = struct
+  type ('a, 'b, 'c) s = {
+    ens : ('a, 'b, 'c) Namespace.t;
+    tns : ('a, 'b, 'c) Namespace.t;
+  }
+end
+
+open S
+
+(* sad eta expantion noises *)
+let set_ens x =
+  State.translate (fun { ens; tns = _ } -> ens) (fun ens s -> { s with ens }) x
+
+let set_tns x =
+  State.translate (fun { ens = _; tns } -> tns) (fun tns s -> { s with tns }) x
+
+let rec top_level_name_mapper = function
   | curr :: next ->
-      let ens, tns, value =
+      let%bind value =
         match curr with
         | Decl { name; expr } ->
-            let ens, name = assign ens name in
-            let nens, expr = expr_name_mapper ens expr in
-            (scope ens nens, tns, Decl { name; expr })
+            let%bind name = set_ens (Namespace.assign name) in
+            let%bind old_ens = set_ens State.inspect in
+            let%bind expr = set_ens (expr_name_mapper expr) in
+            let%map () = set_ens (scope_update old_ens) in
+            Decl { name; expr }
         | TyDef { name; vars; constructors } ->
-            let tns, name = assign tns name in
-            let ntns, vars =
-              List.fold ~init:(tns, [])
-                ~f:(fun (tns, vars) var ->
-                  let ns, var = bind tns var in
-                  (ns, var :: vars))
-                vars
+            let%bind name = set_tns (Namespace.assign name) in
+            let%bind old_tns = set_tns State.inspect in
+            let%bind vars =
+              set_tns (fun tns ->
+                  List.fold_map ~init:tns ~f:(Fn.flip Namespace.bind) vars)
             in
-            let (ens, ntns), constructors =
-              List.fold_map ~init:(ens, ntns)
-                ~f:(fun (ens, tns) { constructor; ty } ->
-                  let ens, constructor = assign ens constructor in
-                  let tns, ty = ty_name_mapper tns ty in
-                  ((ens, tns), { constructor; ty }))
+            let%bind constructors init =
+              List.fold_map ~init
+                ~f:
+                  (Fn.flip (fun { constructor; ty } ->
+                       let%bind constructor =
+                         set_ens (Namespace.assign constructor)
+                       in
+                       let%map ty = set_tns (ty_name_mapper ty) in
+                       { constructor; ty }))
                 constructors
             in
-            ( ens,
-              scope tns ntns,
-              (* TODO: Vars might be backwards *)
-              TyDef { name; vars; constructors } )
-        | DeclTy _ -> (ens, tns, failwith "todo")
+            let%map () = set_tns (scope_update old_tns) in
+            (* TODO: Vars might be backwards *)
+            TyDef { name; vars; constructors }
+        | DeclTy _ -> State.return (failwith "todo")
       in
-      let ens, tns, next = top_level_name_mapper ~ens ~tns next in
-      (ens, tns, value :: next)
-  | [] -> (ens, tns, [])
+      let%map next = top_level_name_mapper next in
+      value :: next
+  | [] -> State.return []

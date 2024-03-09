@@ -13,7 +13,7 @@ let string_namespace =
   let s2i = Map.empty (module String) in
   make ~i2s ~s2i ~req:s2i ()
 
-let resolve ({ i2s; s2i; i; req } as id) name =
+let resolve name ({ i2s; s2i; i; req } as id) =
   match (Map.find s2i name, Map.find req name) with
   | None, Some v -> (id, v)
   | None, None ->
@@ -26,7 +26,7 @@ let resolve ({ i2s; s2i; i; req } as id) name =
         i )
   | Some v, _ -> (id, v)
 
-let assign { i2s; s2i; i; req } name =
+let assign name { i2s; s2i; i; req } =
   match Map.find req name with
   | Some v ->
       ( {
@@ -47,12 +47,12 @@ let assign { i2s; s2i; i; req } name =
 
 let scope { s2i; i2s = _; i = _; req = _ } ns = { ns with s2i }
 
-let scopef ns f =
+let scopef f ns =
   let nns, v = f ns in
   (scope ns nns, v)
 
 (** Unsafely binds the key  *)
-let bind { i2s; s2i; i; req } name =
+let bind name { i2s; s2i; i; req } =
   ( {
       i2s = Map.set ~key:i ~data:name i2s;
       s2i = Map.set ~key:name ~data:i s2i;
@@ -61,4 +61,5 @@ let bind { i2s; s2i; i; req } name =
     },
     i )
 
-let ( let+ ) = scopef
+(* Can de defined on state_T *)
+(* let ( let+ ) a b = scopef *)

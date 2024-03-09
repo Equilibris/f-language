@@ -5,7 +5,8 @@ open Flang.Ds
 open Recursion_detection
 
 let _ =
-  let ens, _, v = parse_and_convert rec_test in
+  let open Flang.Irs.De_bruijn_transform.S in
+  let { ens; tns = _ }, v = parse_and_convert rec_test in
   let i = Namespace.i ens in
   let tln, code, deps = code_array_transform i v in
   let recs = recalculate_recursion deps in

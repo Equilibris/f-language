@@ -1,6 +1,7 @@
 open! Core
 open Ds
 open Ast
+open De_bruijn_transform.S
 
 type ('i_cmp, 'k_cmp, 'm_cmp) flat_ir = {
   tns : (string, 'i_cmp, 'k_cmp) Namespace.t;
@@ -13,7 +14,7 @@ type ('i_cmp, 'k_cmp, 'm_cmp) flat_ir = {
 
 let make = make_flat_ir
 
-let rec of_ens_tns_stream (ens, tns, stream) =
+let rec of_ens_tns_stream (({ ens; tns } : ('a, 'b, 'c) s), stream) =
   match stream with
   | [] ->
       make ~ens ~tns
@@ -21,10 +22,10 @@ let rec of_ens_tns_stream (ens, tns, stream) =
         ~fn_def_map:(Map.empty (module Int))
         ~fn_ty_map:(Map.empty (module Int))
   | Decl ({ name; expr = _ } as v) :: stream ->
-      let stream = of_ens_tns_stream (ens, tns, stream) in
+      let stream = of_ens_tns_stream ({ ens; tns }, stream) in
       { stream with fn_def_map = Map.set ~key:name ~data:v stream.fn_def_map }
   | TyDef ({ name; vars; constructors } as v) :: stream ->
-      let stream = of_ens_tns_stream (ens, tns, stream) in
+      let stream = of_ens_tns_stream ({ ens; tns }, stream) in
       let ret_ty =
         List.fold ~init:(Id name)
           ~f:(fun ty arg -> Applicative { ty; arg = Var arg })

@@ -6,8 +6,8 @@ open Flang.Irs.Ast
 let convert = Fn.compose of_ens_tns_stream parse_and_convert
 
 let convert_with_map x =
-  let ens, tns, v = parse_and_convert x in
-  (ens, tns, of_ens_tns_stream (ens, tns, v))
+  let s, v = parse_and_convert x in
+  (s, of_ens_tns_stream (s, v))
 
 let ty_value = convert "type bool = True () | False (); type x = X ((), ((),));"
 

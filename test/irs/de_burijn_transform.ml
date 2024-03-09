@@ -1,17 +1,18 @@
 open Core
 open Core.Poly
 open Flang.Irs.De_bruijn_transform
+open Flang.Irs.De_bruijn_transform.S
 open Flang.Ds.Namespace
 open Flang.Irs.Ast
 
-let convert code =
-  top_level_name_mapper ~tns:string_namespace ~ens:string_namespace code
+let x = { tns = string_namespace; ens = string_namespace }
+let convert code = top_level_name_mapper code x
 
 let parse_and_convert code =
   convert (Parser.test_parse Flang.Parser.top_level code)
 
 let print_src_kvs code =
-  let ens, tns, result = parse_and_convert code in
+  let { ens; tns }, result = parse_and_convert code in
   stmts_to_src Int.to_string result |> print_endline;
   Printf.printf "\n";
   i2s ens
@@ -23,7 +24,7 @@ let print_src_kvs code =
 let rec_test = {|x = \x y x;y = \y x y;|}
 
 let () =
-  let _, _, res = parse_and_convert rec_test in
+  let _, res = parse_and_convert rec_test in
   assert (
     res
     = [
@@ -44,7 +45,7 @@ let () =
       ])
 
 let () =
-  let _, _, res = parse_and_convert {|type bool = True () | False (); |} in
+  let _, res = parse_and_convert {|type bool = True () | False (); |} in
   assert (
     res
     = [
@@ -61,7 +62,7 @@ let () =
       ])
 
 let () =
-  let _, _, res =
+  let _, res =
     parse_and_convert
       {|
         v = match x with
@@ -97,7 +98,7 @@ let () =
       ])
 
 let () =
-  let _, _, res = parse_and_convert {| type x = X (x, ((),)); |} in
+  let _, res = parse_and_convert {| type x = X (x, ((),)); |} in
   assert (
     res
     = [

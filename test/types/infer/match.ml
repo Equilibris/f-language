@@ -68,7 +68,7 @@ let _ =
       (Arrow { i = Applicative { ty = Id 1; arg = Var 0 }; o = Id 0 }))
 
 let _ =
-  let _, _, flat =
+  let _, flat =
     convert_with_map
       {|
            restrict_id = \x
@@ -83,7 +83,7 @@ let _ =
       (Arrow { i = TupleTy [ Var 0; Var 1 ]; o = TupleTy [ Var 0; Var 1 ] }))
 
 let _ =
-  let _, _, flat =
+  let _, flat =
     convert_with_map
       {|
         type list 'a = Nil () | Cons ('a, list 'a);
