@@ -115,39 +115,44 @@ let set_ens x =
 let set_tns x =
   State.translate (fun { ens = _; tns } -> tns) (fun tns s -> { s with tns }) x
 
-let rec top_level_name_mapper = function
-  | curr :: next ->
-      let%bind value =
-        match curr with
-        | Decl { name; expr } ->
-            let%bind name = set_ens (Namespace.assign name) in
-            let%bind old_ens = set_ens State.inspect in
-            let%bind expr = set_ens (expr_name_mapper expr) in
-            let%map () = set_ens (scope_update old_ens) in
-            Decl { name; expr }
-        | TyDef { name; vars; constructors } ->
-            let%bind name = set_tns (Namespace.assign name) in
-            let%bind old_tns = set_tns State.inspect in
-            let%bind vars =
-              set_tns (fun tns ->
-                  List.fold_map ~init:tns ~f:(Fn.flip Namespace.bind) vars)
-            in
-            let%bind constructors init =
-              List.fold_map ~init
-                ~f:
-                  (Fn.flip (fun { constructor; ty } ->
-                       let%bind constructor =
-                         set_ens (Namespace.assign constructor)
-                       in
-                       let%map ty = set_tns (ty_name_mapper ty) in
-                       { constructor; ty }))
-                constructors
-            in
-            let%map () = set_tns (scope_update old_tns) in
-            (* TODO: Vars might be backwards *)
-            TyDef { name; vars; constructors }
-        | DeclTy _ -> State.return (failwith "todo")
-      in
-      let%map next = top_level_name_mapper next in
-      value :: next
-  | [] -> State.return []
+let handle_decl { name; expr } =
+  let%bind name = set_ens (Namespace.assign name) in
+  let%bind old_ens = set_ens State.inspect in
+  let%bind expr = set_ens (expr_name_mapper expr) in
+  let%map () = set_ens (scope_update old_ens) in
+  Decl { name; expr }
+
+let handle_ty_def { name; vars; constructors } =
+  let%bind name = set_tns (Namespace.assign name) in
+  let%bind old_tns = set_tns State.inspect in
+  let%bind vars =
+    set_tns (fun tns ->
+        List.fold_map ~init:tns ~f:(Fn.flip Namespace.bind) vars)
+  in
+  let%bind constructors init =
+    List.fold_map ~init
+      ~f:
+        (Fn.flip (fun { constructor; ty } ->
+             let%bind constructor = set_ens (Namespace.assign constructor) in
+             let%map ty = set_tns (ty_name_mapper ty) in
+             { constructor; ty }))
+      constructors
+  in
+  let%map () = set_tns (scope_update old_tns) in
+  TyDef { name; vars; constructors }
+
+let top_level_name_mapper l =
+  let%map x init =
+    List.fold_map ~init
+      ~f:
+        (Fn.flip (fun curr ->
+             let%map value =
+               match curr with
+               | Decl x -> handle_decl x
+               | TyDef x -> handle_ty_def x
+               | DeclTy _ -> State.return (failwith "todo")
+             in
+             value))
+      l
+  in
+  x
