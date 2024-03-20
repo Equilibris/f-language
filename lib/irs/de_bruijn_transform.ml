@@ -16,8 +16,7 @@ open State.Let_syntax
 let scope_update x =
   State.replace (fun old current -> Namespace.scope old current) x
 
-let rec pat_name_mapper v =
-  match v with
+let rec pat_name_mapper = function
   | BindingPat var_name ->
       let%map var_name = Namespace.bind var_name in
       BindingPat var_name

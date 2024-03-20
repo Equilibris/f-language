@@ -8,7 +8,7 @@ open State_opt
 open State_opt.Let_syntax
 open Type_map.Setters (Option)
 open Flat.Setters (Option)
-
+open Type_map
 (*
  DONE: if we reverse the arguments to the function we can
  do most of the work using currying and then a custom
@@ -96,8 +96,8 @@ let rec app fn_ty arg_ty =
  *)
 let rec gather_type id =
   let%bind ty_map = inspect |> set_ty_map in
-  let%bind condition = Type_map.mem id |> i_ret |> effectless |> set_ty_map in
-  if condition then
+  let%bind is_rec = Type_map.mem id |> i_ret |> effectless |> set_ty_map in
+  if is_rec then
     match Map.find ty_map.id_ty_map id with
     | None ->
         let%map ty_var = Type_map.mint id |> i_ret |> set_ty_map in
@@ -128,8 +128,7 @@ let rec gather_type id =
 
             ty)
 
-and infer_pat nonfree v =
-  match v with
+and infer_pat nonfree = function
   | BindingPat v ->
       let%map ty_var = Type_map.mint v |> i_ret |> set_ty_map in
       let nonfree = Set.add nonfree v in
@@ -181,9 +180,7 @@ and infer_pat nonfree v =
     After all of these one finally passes the expression
     for inference. This is also the point of recursion.
   *)
-and infer_expr nonfree v =
-  let open! Type_map in
-  match v with
+and infer_expr nonfree = function
   | Call { callee; arg } ->
       let%bind callee = infer_expr nonfree callee in
       let%bind arg = infer_expr nonfree arg in
