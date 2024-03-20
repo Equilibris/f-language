@@ -37,7 +37,6 @@ let gather_top_level id =
               Map.set ~key ~data:ty |> update |> set_fn_ty_map |> set_flat_ir
             in
             return ()
-        (* TODO: reason about if this is correct *)
         | None, Some ty ->
             let%bind ty =
               replace_var_deep ty |> effectless |> set_var_map |> set_ty_map

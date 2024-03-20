@@ -83,12 +83,10 @@ let _ =
       (Arrow { i = TupleTy [ Var 0; Var 1 ]; o = TupleTy [ Var 0; Var 1 ] }))
 
 let _ =
-  let _, flat =
-    convert_with_map
+  let flat =
+    convert
       {|
         type list 'a = Nil () | Cons ('a, list 'a);
-
-        loop = \x loop x;
 
         map = \f \x
             match x with
@@ -96,7 +94,7 @@ let _ =
             | Cons (v, x) -> Cons (f v, map f x);
       |}
   in
-  let%map _, map_ty = gather_top_level flat 4 in
+  let%map _, map_ty = gather_top_level flat 2 in
   let _, map_ty = canonicalize map_ty in
   assert (
     equal_ty Int.equal map_ty

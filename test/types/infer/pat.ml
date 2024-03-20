@@ -19,8 +19,8 @@ let _ =
 
 let _ =
   let flat_ir = convert {|
-          type bool = True ();
-        |} in
+  type bool = True ();
+|} in
   let%bind { flat_ir = _; ty_map }, (_, true_ty) =
     infer_pat eset (ConstructorPat (0, BindingPat 1)) { flat_ir; ty_map }
   in
@@ -28,36 +28,34 @@ let _ =
   assert (
     equal_ty Int.equal true_ty (Id 0) && equal_ty Int.equal alt_ty (TupleTy []))
 
-(* TODO: *)
-(* let _ = *)
-(* let flat = convert {| *)
-   (*           type bool = True ((), ((),)); *)
-   (*         |} in *)
-(*   let%bind _, ty_map, _, match_ty = *)
-(*     infer_pat flat ty_map eset (ConstructorPat (0, BindingPat 1)) *)
-(*   in *)
-(*   let%map alt_ty = Map.find ty_map.id_ty_map 1 in *)
+let _ =
+  let flat_ir =
+    convert {|
+             type bool = True ((), ((),));
+           |}
+  in
+  let%bind { ty_map; flat_ir = _ }, (_, match_ty) =
+    infer_pat eset (ConstructorPat (0, BindingPat 1)) { flat_ir; ty_map }
+  in
+  let%map alt_ty = Map.find ty_map.id_ty_map 1 in
 
-(*   print_endline "hello"; *)
-(*   show_ty Format.pp_print_int match_ty |> print_endline; *)
-(*   show_ty Format.pp_print_int alt_ty |> print_endline; *)
-(*   print_endline "end hello" *)
-(* assert ( *)
-(*   equal_ty Int.equal true_ty (Id 0) *)
-(*   && equal_ty Int.equal alt_ty *)
-(*        (TupleTy [ TupleTy []; TupleTy [ TupleTy [] ] ])) *)
+  assert (
+    equal_ty Int.equal match_ty (Id 0)
+    && equal_ty Int.equal alt_ty
+         (TupleTy [ TupleTy []; TupleTy [ TupleTy [] ] ]))
 
-(* let _ = *)
-(* let flat = convert {| *)
-   (*           type bool = True (); *)
-   (*         |} in *)
-(*   let%map _, ty_map, _, true_ty = *)
-(*     infer_pat flat ty_map eset *)
-(*       (TuplePat [ ConstructorPat (0, BindingPat 1); TuplePat [] ]) *)
-(*   in *)
-(*   assert ( *)
-(*     equal_ty Int.equal (Map.find_exn ty_map.id_ty_map 1) (TupleTy []) (* && *) *)
-(*     && equal_ty Int.equal true_ty (TupleTy [ Id 0; TupleTy [] ])) *)
+let _ =
+  let flat_ir = convert {|
+        type bool = True ();
+    |} in
+  let%map { ty_map; flat_ir = _ }, (_, match_ty) =
+    infer_pat eset
+      (TuplePat [ ConstructorPat (0, BindingPat 1); TuplePat [] ])
+      { flat_ir; ty_map }
+  in
+  assert (
+    equal_ty Int.equal (Map.find_exn ty_map.id_ty_map 1) (TupleTy []) (* && *)
+    && equal_ty Int.equal match_ty (TupleTy [ Id 0; TupleTy [] ]))
 
 let _ =
   let flat_ir = convert {|
@@ -74,3 +72,19 @@ let _ =
     && equal_ty Int.equal
          (Map.find_exn ty_map.id_ty_map 10)
          (TupleTy [ TupleTy [] ]))
+
+let _ =
+  let flat_ir = convert {|
+    type box 'a = Box 'a;
+  |} in
+  let%bind { ty_map; flat_ir = _ }, (_, match_ty) =
+    infer_pat eset
+      (ConstructorPat (0, ConstructorPat (0, BindingPat 1)))
+      { flat_ir; ty_map }
+  in
+  let alt_ty = Map.find_exn ty_map.id_ty_map 1 in
+  let%map match_ty = replace_var_deep match_ty ty_map.var_map in
+  assert (
+    equal_ty Int.equal match_ty
+      (Applicative { ty = Id 0; arg = Applicative { ty = Id 0; arg = Var 1 } })
+    && equal_ty Int.equal alt_ty (Var 1))

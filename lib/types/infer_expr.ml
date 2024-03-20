@@ -10,10 +10,11 @@ open Type_map.Setters (Option)
 open Flat.Setters (Option)
 
 (*
- TODO: if we reverse the arguments to the function we can
+ DONE: if we reverse the arguments to the function we can
  do most of the work using currying and then a custom
  let binding that lets us recive a given input from a
  curried function to achive quasimutability
+ SOLUTION: This is simply the State_t
  *)
 
 module State = struct
@@ -40,7 +41,6 @@ module State = struct
   end
 end
 
-open State
 open State.Setters (Option)
 
 let show_var_map ?(key_map = Int.to_string) v =
@@ -108,15 +108,18 @@ let rec gather_type id =
     match Map.find id_ty_map id with
     | Some v -> return v
     | None -> (
-        let%bind fn_ty_map = inspect |> set_fn_ty_map |> set_flat_ir in
-        match Map.find fn_ty_map id with
+        match%bind
+          Fn.flip Map.find id |> i_ret |> effectless |> set_fn_ty_map
+          |> set_flat_ir
+        with
         | Some v -> return v
         | None ->
-            let%bind fn_def_map = inspect |> set_fn_def_map |> set_flat_ir in
             (* Reference to undefined function, this should in theory not be
                possible if data is generated from the given function.
                Thereby I am ok using exn here *)
-            let { name = _; expr } = Map.find_exn fn_def_map id in
+            let%bind { name = _; expr } =
+              Fn.flip Map.find id |> effectless |> set_fn_def_map |> set_flat_ir
+            in
             let%bind () = Type_map.enqueue id |> update |> set_ty_map in
             let%bind ty = infer_expr (Set.empty (module Int)) expr in
             let%map () =
@@ -141,12 +144,10 @@ and infer_pat nonfree v =
       let%bind nonfree, deep = infer_pat nonfree b in
       let%bind _ = ty_map_unify deep i |> set_ty_map in
       let%map () =
-        effect (fun ty_map ->
-            Set.to_list nonfree
-            |> List.fold ~init:(Some ty_map) ~f:(fun ty_map other ->
-                   let open Option.Let_syntax in
-                   let%bind ty_map = ty_map in
-                   Type_map.replace_in_place other ty_map))
+        Set.to_list nonfree
+        |> List.fold ~init:(return ()) ~f:(fun state other ->
+               let%bind () = state in
+               Type_map.replace_in_place other |> effect)
         |> set_ty_map
       in
 
@@ -154,7 +155,7 @@ and infer_pat nonfree v =
   | TuplePat x ->
       let%map nonfree, rev_tuple =
         List.fold
-          ~init:(fun state -> Some (state, (nonfree, [])))
+          ~init:(return (nonfree, []))
           ~f:(fun current next ->
             (* TODO: This can be a fold_map *)
             let%bind nonfree, last = current in
@@ -190,8 +191,8 @@ and infer_expr nonfree v =
   | Bind { name; value; within } ->
       let nonfree = Set.add nonfree name in
       let%bind value = infer_expr nonfree value in
-      (* TODO: is this redundant *)
-      let%bind _ = mint name |> i_ret |> set_ty_map in
+      (* DONE: is this redundant SOLUTION: yes, but its fine to keep *)
+      (* let%bind _ = mint name |> i_ret |> set_ty_map in *)
       let%bind within = infer_expr nonfree within in
       let%bind () = set_or_update name value |> effect |> set_ty_map in
       let%map within =
@@ -204,25 +205,19 @@ and infer_expr nonfree v =
       let%bind arm_ty = Type_map.bind_var |> i_ret |> set_ty_map in
 
       let%map _, arm_ty =
-       fun state ->
         List.fold
-          ~init:(Some (state, (scrutinee_ty, arm_ty)))
+          ~init:(return (scrutinee_ty, arm_ty))
           ~f:(fun last (pat, ex) ->
-            let open Option.Let_syntax in
-            let%bind { flat_ir; ty_map }, (scrutinee_ty, arm_ty) = last in
-            let%bind { flat_ir; ty_map }, (nonfree, u_ty) =
-              infer_pat nonfree pat { flat_ir; ty_map }
-            in
+            let%bind scrutinee_ty, arm_ty = last in
+            let%bind nonfree, u_ty = infer_pat nonfree pat in
 
-            let%bind ty_map, scrutinee_ty =
-              ty_map_unify u_ty scrutinee_ty ty_map
+            let%bind scrutinee_ty =
+              ty_map_unify u_ty scrutinee_ty |> set_ty_map
             in
-            let%bind { flat_ir; ty_map }, u_ty =
-              infer_expr nonfree ex { flat_ir; ty_map }
-            in
-            let%map ty_map, arm_ty = ty_map_unify u_ty arm_ty ty_map in
+            let%bind u_ty = infer_expr nonfree ex in
+            let%map arm_ty = ty_map_unify u_ty arm_ty |> set_ty_map in
 
-            ({ flat_ir; ty_map }, (scrutinee_ty, arm_ty)))
+            (scrutinee_ty, arm_ty))
           arms
       in
       arm_ty

@@ -6,11 +6,6 @@ open State.Let_syntax
 (** De Bruijn index Transformations *)
 
 (*
- TODO:
- - [ ] Look into using binding overriding to make this code a bit nicer
- *)
-
-(*
  Variable name index
 
  - If a var starts with e or t it is expr or type respectivley
