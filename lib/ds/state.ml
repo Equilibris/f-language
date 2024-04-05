@@ -32,6 +32,7 @@ module State_t (Meta : Base.Monad.S) = struct
     let replace f n old = Meta.return (f n old, ())
     let update f s = Meta.return (f s, ())
 
+    (* Kind-of the Iso optic *)
     let translate :
         ('old_state -> 'new_value) ->
         ('new_state -> 'old_state -> 'old_state) ->

@@ -4,7 +4,7 @@ open Pat
 type ('a, 'expr) bind_expr = { name : 'a; value : 'expr; within : 'expr }
 and 'expr call_expr = { callee : 'expr; arg : 'expr }
 and ('a, 'expr) lambda_expr = { binding : 'a; content : 'expr }
-and 'expr tuple_expr = 'expr list
+and 'a tuple_expr = 'a expr list
 and ('a, 'expr) constructor_expr = 'a * 'expr
 and ('a, 'expr) pat_arm = 'a pat * 'expr
 
@@ -18,7 +18,7 @@ and 'a expr =
   | Match of ('a, 'a expr) match_expr
   | Call of 'a expr call_expr
   | Lambda of ('a, 'a expr) lambda_expr
-  | Tuple of 'a expr tuple_expr
+  | Tuple of 'a tuple_expr
   | Constructor of ('a, 'a expr) constructor_expr
   | Id of 'a
 [@@deriving show, eq]

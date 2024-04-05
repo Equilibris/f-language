@@ -16,6 +16,7 @@ let transpose x =
   List.fold x ~init ~f:(Fn.flip (List.map2_exn ~f:List.cons))
 
 exception Would_not_unify
+(** Exception to mark an impossible case *)
 
 let get_applicative_constructors ty =
   (* Might be reversed *)
@@ -73,16 +74,6 @@ let rec handle_constructors constructors pats =
   | None -> None
   | Some (constructor_id, expr) -> Some (Constructor (constructor_id, expr))
 
-(**
-   Determines if a given family of patterns is total or not. Here are the
-   meaning of some of the return_types:
-
-   - None       -> Failure
-   - Some(None) -> Success, there exists no value that this pattern
-                   does not catch
-   - Some(ls)   -> Success, the compiler detected that all the patterns
-                   in ls are unhandled
- *)
 and pattern_total ty pats =
   if List.exists ~f:(function BindingPat _ -> true | _ -> false) pats then
     return None
@@ -124,6 +115,16 @@ and pattern_total ty pats =
         else None
     | Var _ | Arrow _ -> fail (* value can only be matched by binding pat *)
 
+(**
+   Determines if a given family of patterns is total or not. Here are the
+   meaning of some of the return_types:
+
+   - None       -> Failure
+   - Some(None) -> Success, there exists no value that this pattern
+                   does not catch
+   - Some(ls)   -> Success, the compiler detected that all the patterns
+                   in ls are unhandled
+ *)
 let pattern_total ty pats flat =
   let open Option.Let_syntax in
   let%map _, v = pattern_total ty pats flat in

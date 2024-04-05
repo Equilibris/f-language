@@ -21,7 +21,7 @@
 
 %type  <string Irs.Ast.expr> expr expr_atom
 
-%type <string Irs.Ast.expr Irs.Ast.tuple_expr> tuple_inner
+%type <string Irs.Ast.tuple_expr> tuple_inner
 
 %start <string Irs.Ast.ty> test_ty
 %start <string Irs.Ast.pat> test_pat

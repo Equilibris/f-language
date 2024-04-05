@@ -192,11 +192,7 @@ and infer_expr nonfree = function
       (* let%bind _ = mint name |> i_ret |> set_ty_map in *)
       let%bind within = infer_expr nonfree within in
       let%bind () = set_or_update name value |> effect |> set_ty_map in
-      let%map within =
-        replace_var within |> i_ret |> effectless |> set_var_map |> set_ty_map
-      in
-
-      within
+      replace_var within |> i_ret |> effectless |> set_var_map |> set_ty_map
   | Match { scrutinee; arms } ->
       let%bind scrutinee_ty = infer_expr nonfree scrutinee in
       let%bind arm_ty = Type_map.bind_var |> i_ret |> set_ty_map in
@@ -248,7 +244,4 @@ and infer_expr nonfree = function
 
       let%bind ty = gather_type v in
 
-      if nonfree then return ty
-      else
-        let%map v = canonicalize ty |> i_ret |> set_ty_map in
-        v
+      if nonfree then return ty else canonicalize ty |> i_ret |> set_ty_map
