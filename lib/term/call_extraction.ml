@@ -1,6 +1,9 @@
 open! Core
 open Irs.Ast
 
+(**
+   Gets the function names and expressions of given calls
+ *)
 let extract_calls expr =
   let curr_calls = Hashtbl.create (module Int) in
   let rec explore = function
@@ -14,7 +17,7 @@ let extract_calls expr =
         explore within
     | Match { scrutinee; arms } ->
         explore scrutinee;
-        List.iter ~f:(fun (_, b) -> explore b) arms
+        List.iter ~f:(Fn.compose explore snd) arms
     | Tuple t -> List.iter t ~f:explore
     | Lambda { binding = _; content = v } | Constructor (_, v) -> explore v
     | Id _ -> ()

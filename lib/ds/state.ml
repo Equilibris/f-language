@@ -5,9 +5,12 @@ module State_t (Meta : Base.Monad.S) = struct
     type ('a, 'state) t = 'state -> ('state * 'a) Meta.t
 
     let return : 'a -> ('a, 'b) t = fun a state -> Meta.return (state, a)
+
+    (** Take an entry from within the Identity monad and enter it into the given monad *)
     let i_ret f s = Meta.return (f s)
 
-    let t_return : 'a Meta.t -> ('a, 'state) t =
+    (** Enter a value from the given monad into the transformed monad  *)
+    let t_ret : 'a Meta.t -> ('a, 'state) t =
      fun v state -> Meta.map ~f:(fun v -> (state, v)) v
 
     let bind : ('a, 'e) t -> f:('a -> ('b, 'e) t) -> ('b, 'e) t =

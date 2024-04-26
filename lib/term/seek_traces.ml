@@ -86,7 +86,7 @@ let rec get_traces = function
       let%bind () = Map.set ~key ~data |> i_ret |> effect in
       get_traces within
   | Lambda { binding = key; content } ->
-      let%bind () = Map.set ~key ~data:[] |> i_ret |> effect in
+      let%bind () = Map.set ~key ~data:[ TId key ] |> i_ret |> effect in
       get_traces content
   | Tuple l ->
       let%map x =
@@ -103,4 +103,22 @@ let rec get_traces = function
       []
   (* TODO: This require deeper trace types... This is an inference
               job wtf *)
-  | Id v -> return [ TId v ]
+  | Id v -> Fn.flip Map.find v |> effectless
+
+exception Malformed_input
+
+let rec flatten_trace ~pred v =
+  let open List.Let_syntax in
+  match v with
+  | [] -> []
+  | TId v :: [] -> return (v, 0)
+  | Inc constructor :: rest ->
+      let%map a, b = flatten_trace ~pred rest in
+      (a, b + if pred constructor then 1 else 0)
+  | Dec constructor :: rest ->
+      let%map a, b = flatten_trace ~pred rest in
+      (a, b - if pred constructor then 1 else 0)
+  | Union traces :: [] | Tuple traces :: [] ->
+      let%bind trace = traces in
+      flatten_trace ~pred trace
+  | _ -> raise Malformed_input

@@ -9,11 +9,14 @@ let _ =
       {|
         type nat = Z () | S nat;
 
-        z = \x \y match x with Z () -> z_alt (Z()) (Z()) | S n -> z n y;
+        z = \x \y
+            match x with
+            | Z () -> z_alt (Z()) (Z()) 
+            | S n -> z n y;
 
     |}
   in
-  let { name = _; expr } = Map.find_exn flat_ir.fn_def_map 2 in
+  let expr = Map.find_exn flat_ir.fn_def_map 2 in
   let calls = extract_calls expr in
 
   assert (

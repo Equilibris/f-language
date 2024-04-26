@@ -62,7 +62,7 @@ let rec unify eq_t a b =
       Applicative { arg; ty }
   | TupleTy tup, TupleTy tup2 ->
       let tup, rem = List.zip_with_remainder tup tup2 in
-      if Option.is_some rem then t_return None
+      if Option.is_some rem then t_ret None
       else
         let%bind tup var_map =
           List.fold
@@ -91,5 +91,5 @@ let rec unify eq_t a b =
       | None ->
           let%map () = update (Map.set ~key:v ~data:x) in
           x)
-  | a, b -> t_return (if equal_ty eq_t a b then Some a else None)
+  | a, b -> t_ret (if equal_ty eq_t a b then Some a else None)
 (* Error can be deduced*)

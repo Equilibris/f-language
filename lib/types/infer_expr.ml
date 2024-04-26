@@ -43,12 +43,14 @@ end
 
 open State.Setters (Option)
 
-let show_var_map ?(key_map = Int.to_string) v =
+let show_map ~key_map ~val_map v =
   Map.to_alist v
   |> List.map ~f:(fun (k, v) ->
-         Printf.sprintf "\t%s = %s" (key_map k)
-           (ty_to_src Int.to_string Int.to_string v))
+         Printf.sprintf "\t%s = %s" (key_map k) (val_map v))
   |> String.concat ~sep:",\n"
+
+let show_var_map ?(key_map = Int.to_string) =
+  show_map ~key_map ~val_map:(ty_to_src Int.to_string Int.to_string)
 
 let print_ty_map ?(key_map = Int.to_string) ty_map =
   let () =
@@ -81,7 +83,7 @@ let rec app fn_ty arg_ty =
       let%bind _ = ty_map_unify v i_type |> set_ty_map in
 
       app i_type arg_ty
-  | _ -> t_return None
+  | _ -> t_ret None
 
 (** gather_type does exactly what one thinks it does;
     it asks the current context for the type of a
@@ -117,7 +119,7 @@ let rec gather_type id =
             (* Reference to undefined function, this should in theory not be
                possible if data is generated from the given function.
                Thereby I am ok using exn here *)
-            let%bind { name = _; expr } =
+            let%bind expr =
               Fn.flip Map.find id |> effectless |> set_fn_def_map |> set_flat_ir
             in
             let%bind () = Type_map.enqueue id |> update |> set_ty_map in
@@ -138,7 +140,7 @@ and infer_pat nonfree = function
       let%bind ty = gather_type a in
       let%bind ty = canonicalize ty |> i_ret |> set_ty_map in
       let%bind { i; o } =
-        t_return (match ty with Arrow v -> Some v | _ -> None)
+        t_ret (match ty with Arrow v -> Some v | _ -> None)
       in
       let%bind nonfree, deep = infer_pat nonfree b in
       let%bind _ = ty_map_unify deep i |> set_ty_map in

@@ -7,7 +7,7 @@ type ('i_cmp, 'k_cmp, 'm_cmp) flat_ir = {
   tns : (string, 'i_cmp, 'k_cmp) Namespace.t;
   ens : (string, 'i_cmp, 'k_cmp) Namespace.t;
   ty_def_map : (int, int ty_def, 'm_cmp) Map.t;
-  fn_def_map : (int, (int, int expr) decl_stmt, 'm_cmp) Map.t;
+  fn_def_map : (int, int expr, 'm_cmp) Map.t;
   fn_ty_map : (int, int ty, 'm_cmp) Map.t;
 }
 [@@deriving make, fields]
@@ -64,7 +64,7 @@ let of_ens_tns_stream (({ ens; tns } : ('a, 'b, 'c) s), stream) =
       | Decl ({ name; expr = _ } as v) ->
           {
             stream with
-            fn_def_map = Map.set ~key:name ~data:v stream.fn_def_map;
+            fn_def_map = Map.set ~key:name ~data:v.expr stream.fn_def_map;
           }
       | TyDef ({ name; vars; constructors } as v) ->
           let ret_ty =

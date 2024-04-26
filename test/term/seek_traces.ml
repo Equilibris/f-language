@@ -2,7 +2,6 @@ open! Core
 open Irs.Flat
 open Flang.Term.Seek_traces
 open Flang.Irs.Flat
-open Flang.Irs.Ast
 open Core.Poly
 
 let canon_alist = List.sort ~compare:(fun (a, _) (b, _) -> Int.compare a b)
@@ -12,7 +11,7 @@ let m_empty = Map.empty (module Int)
 
 let get_traces_of flat id =
   let def_map = fn_def_map flat in
-  let { name = _; expr } = Map.find_exn def_map id in
+  let expr = Map.find_exn def_map id in
   get_traces expr m_empty
 
 let _ =
